@@ -235,6 +235,11 @@ final class DiffCoverageReport {
    * reader has to decide whether the module was part of the run or the file simply contributes no
    * class.
    *
+   * <p>Two files under one key, as when two source roots each hold a {@code Util.kt} of one package,
+   * are each reported against the same counters, since JaCoCo records the lines of both under one
+   * source file and gives no way to tell them apart. Each path is still printed, so that neither
+   * changed file leaves the report.
+   *
    * @param sources the working tree the uncovered lines are quoted from
    */
   static DiffCoverageReport measure(

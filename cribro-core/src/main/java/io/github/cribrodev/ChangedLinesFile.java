@@ -60,7 +60,8 @@ public final class ChangedLinesFile {
    * Writes the changed lines to a file, replacing whatever it held.
    *
    * <p>Two files under one key, which happens where two source roots hold a file of one name in one
-   * package, are written as one entry with the lines of both, under the path of the first.
+   * package, are written as one entry with the lines of both, under the path that sorts first, so
+   * that the file reads the same whatever order the files come in.
    *
    * @param header comment lines written before the entries, without the leading {@code #}
    * @param files the changed files; a file with no changed line is left out
@@ -78,7 +79,7 @@ public final class ChangedLinesFile {
       if (changed.lines().isEmpty()) {
         continue;
       }
-      paths.putIfAbsent(changed.key(), changed.path());
+      paths.merge(changed.key(), changed.path(), (a, b) -> a.compareTo(b) <= 0 ? a : b);
       lines.computeIfAbsent(changed.key(), unused -> new TreeSet<>()).addAll(changed.lines());
     }
     for (Map.Entry<String, NavigableSet<Integer>> entry : lines.entrySet()) {

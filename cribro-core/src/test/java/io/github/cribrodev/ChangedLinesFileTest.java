@@ -97,7 +97,10 @@ class ChangedLinesFileTest {
     assertEquals(Map.of("a/B.java", lines(4)), ChangedLinesFile.read(file));
   }
 
-  /** Two source roots can each hold a file of one name in one package. */
+  /**
+   * Two source roots can each hold a file of one name in one package. The entry names the path
+   * that sorts first, whatever order the files come in.
+   */
   @Test
   void twoFilesUnderOneKeyAreWrittenAsOneEntryWithTheLinesOfBoth() throws IOException {
     Path file = directory.resolve("changed-lines.txt");
@@ -106,8 +109,8 @@ class ChangedLinesFileTest {
         file,
         List.of(),
         List.of(
-            new ChangedFile("gen/a/B.java", "a/B.java", lines(7)),
-            new ChangedFile("src/a/B.java", "a/B.java", lines(2))));
+            new ChangedFile("src/a/B.java", "a/B.java", lines(2)),
+            new ChangedFile("gen/a/B.java", "a/B.java", lines(7))));
 
     assertEquals(Map.of("a/B.java", lines(2, 7)), ChangedLinesFile.read(file));
     assertEquals(Map.of("a/B.java", "gen/a/B.java"), ChangedLinesFile.readPaths(file));
