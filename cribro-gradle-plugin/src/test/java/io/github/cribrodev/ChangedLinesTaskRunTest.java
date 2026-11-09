@@ -69,11 +69,11 @@ class ChangedLinesTaskRunTest {
     run("init", "--initial-branch=master", ".");
     Path source = directory.resolve("src/main/java/com/x/A.java");
     Files.createDirectories(source.getParent());
-    Files.writeString(source, "a1\na2\na3\n");
+    Files.writeString(source, "package com.x;\na2\na3\n");
     run("add", "-A");
     run("-c", "user.email=t@example.com", "-c", "user.name=T", "commit", "-m", "seed");
     String head = revParse();
-    Files.writeString(source, "a1\nchanged\na3\n");
+    Files.writeString(source, "package com.x;\nchanged\na3\n");
 
     Path file = write();
 
@@ -81,6 +81,8 @@ class ChangedLinesTaskRunTest {
         "against HEAD (" + head.substring(0, 9) + ")", ChangedLinesFile.readHeader(file));
     assertEquals(
         Map.of("com/x/A.java", new TreeSet<>(List.of(2))), ChangedLinesFile.read(file));
+    assertEquals(
+        Map.of("com/x/A.java", "src/main/java/com/x/A.java"), ChangedLinesFile.readPaths(file));
   }
 
   private String revParse() throws Exception {

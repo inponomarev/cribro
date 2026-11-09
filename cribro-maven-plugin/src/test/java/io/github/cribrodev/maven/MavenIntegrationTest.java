@@ -43,6 +43,9 @@ class MavenIntegrationTest {
 
   private static final String VERSION = System.getProperty("cribro.it.version");
 
+  /** A stable Kotlin release whose Maven plugin runs on the JDKs CI runs the tests on. */
+  private static final String KOTLIN_VERSION = "2.4.21";
+
   @TempDir Path directory;
 
   /** A module whose tests cover one branch of the changed method and leave a method unexecuted. */
@@ -155,6 +158,117 @@ class MavenIntegrationTest {
     write(project.resolve("src/main/java/org/apache/commons/lang3/ArrayUtils.java"), CHANGED_CLASS);
     write(project.resolve("src/test/java/org/apache/commons/lang3/ArrayUtilsTest.java"), TEST_CLASS);
     return project;
+  }
+
+  /**
+   * A Kotlin module keeps its sources where kotlin-maven-plugin's {@code sourceDirs} say, and a
+   * Kotlin file may declare a package its directory spells no part of; the changed file here lies
+   * at the root of {@code src/main/kotlin}. Its one test covers one branch of {@code max} and never
+   * calls {@code next}.
+   */
+  @Test
+  void aKotlinModuleIsMeasuredByThePackageEachFileDeclares() throws Exception {
+    Path project = kotlinModule();
+
+    String test = maven(project, 0, "test");
+    String pit = maven(project, 0, "test-compile", "cribro:pitest-diff");
+
+    assertAll(
+        () ->
+            assertBefore(
+                test,
+                String.join(
+                    "\n",
+                    "  src/main/kotlin/Calc.kt",
+                    "    2/4 changed lines executed, 1/2 branches covered",
+                    "    uncovered changed code:",
+                    "      4: 1 of 2 branches covered: if (a > b) {",
+                    "      7: not executed: return b",
+                    "      11: not executed: return a + 1"),
+                "BUILD SUCCESS"),
+        () -> assertContains(pit, "  src/main/kotlin/Calc.kt\n"),
+        () -> assertContains(pit, "survived: changed conditional boundary, in max"),
+        () ->
+            assertContains(
+                pit, "no test reaches it: Replaced integer addition with subtraction, in next"));
+  }
+
+  /** Writes a Kotlin module that loads cribro from .mvn/extensions.xml, with a change to Calc.kt. */
+  private Path kotlinModule() throws IOException, InterruptedException {
+    Path project = directory.resolve("kotlin");
+    write(project.resolve(".mvn/extensions.xml"), extensionsXml());
+    write(project.resolve("pom.xml"), kotlinPom());
+    write(project.resolve("src/main/kotlin/Calc.kt"), "package demo.math\n\nfun max(a: Int, b: Int): Int {\n    return a\n}\n");
+    write(
+        project.resolve("src/test/kotlin/demo/math/CalcTest.kt"),
+        String.join(
+            "\n",
+            "package demo.math",
+            "",
+            "import org.junit.jupiter.api.Assertions.assertEquals",
+            "import org.junit.jupiter.api.Test",
+            "",
+            "class CalcTest {",
+            "    @Test",
+            "    fun maxOfTwoAndOneIsTwo() {",
+            "        assertEquals(2, max(2, 1))",
+            "    }",
+            "}",
+            ""));
+    commitAsBase(project);
+    write(
+        project.resolve("src/main/kotlin/Calc.kt"),
+        String.join(
+            "\n",
+            "package demo.math",
+            "",
+            "fun max(a: Int, b: Int): Int {",
+            "    if (a > b) {",
+            "        return a",
+            "    }",
+            "    return b",
+            "}",
+            "",
+            "fun next(a: Int): Int {",
+            "    return a + 1",
+            "}",
+            ""));
+    return project;
+  }
+
+  private static String kotlinPom() {
+    return String.join(
+        "\n",
+        "<project xmlns=\"http://maven.apache.org/POM/4.0.0\">",
+        "  <modelVersion>4.0.0</modelVersion>",
+        "  <groupId>demo</groupId><artifactId>kotlin</artifactId><version>1.0</version>",
+        "  <properties>",
+        "    <kotlin.version>" + KOTLIN_VERSION + "</kotlin.version>",
+        "    <kotlin.compiler.jvmTarget>11</kotlin.compiler.jvmTarget>",
+        "    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>",
+        "  </properties>",
+        "  <dependencies>",
+        "    <dependency><groupId>org.jetbrains.kotlin</groupId><artifactId>kotlin-stdlib</artifactId>",
+        "      <version>${kotlin.version}</version></dependency>",
+        "    <dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId>",
+        "      <version>5.11.4</version><scope>test</scope></dependency>",
+        "  </dependencies>",
+        "  <build><plugins>",
+        "    <plugin><groupId>org.jetbrains.kotlin</groupId><artifactId>kotlin-maven-plugin</artifactId>",
+        "      <version>${kotlin.version}</version>",
+        "      <executions>",
+        "        <execution><id>compile</id><phase>compile</phase><goals><goal>compile</goal></goals>",
+        "          <configuration><sourceDirs><sourceDir>${project.basedir}/src/main/kotlin</sourceDir>",
+        "          </sourceDirs></configuration></execution>",
+        "        <execution><id>test-compile</id><phase>test-compile</phase>",
+        "          <goals><goal>test-compile</goal></goals>",
+        "          <configuration><sourceDirs><sourceDir>${project.basedir}/src/test/kotlin</sourceDir>",
+        "          </sourceDirs></configuration></execution>",
+        "      </executions></plugin>",
+        "    <plugin><artifactId>maven-surefire-plugin</artifactId><version>3.5.2</version></plugin>",
+        "  </plugins></build>",
+        "</project>",
+        "");
   }
 
   /**

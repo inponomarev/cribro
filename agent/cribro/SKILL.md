@@ -1,11 +1,11 @@
 ---
 name: cribro
-description: Measure how well the tests of a Gradle or Maven Java project cover the lines the current branch changed. Use after changing the Java sources under src/main of a Gradle or Maven module and adding or changing its tests, before calling the change done; also when asked which changed lines no test executes, whether the new tests would notice a broken line, or for diff coverage or mutation testing of a branch. Runs JaCoCo diff coverage on `test` and PIT on the changed lines, through the build's own cribro plugin or extension, or through an init script or extension jar that leaves the build unchanged.
+description: Measure how well the tests of a Gradle or Maven Java or Kotlin project cover the lines the current branch changed. Use after changing the Java or Kotlin sources under src/main of a Gradle or Maven module and adding or changing its tests, before calling the change done; also when asked which changed lines no test executes, whether the new tests would notice a broken line, or for diff coverage or mutation testing of a branch. Runs JaCoCo diff coverage on `test` and PIT on the changed lines, through the build's own cribro plugin or extension, or through an init script or extension jar that leaves the build unchanged.
 ---
 
 # Diff coverage and diff mutation testing
 
-cribro adds diff coverage to `test` and diff mutation testing to every Java project of a Gradle or Maven build. A build
+cribro adds diff coverage to `test` and diff mutation testing to every Java or Kotlin project of a Gradle or Maven build. A build
 with a `pom.xml` follows the [Maven](#maven) section; the rest of this section is for Gradle builds.
 
 In a Gradle build, cribro adds a `pitestDiff` task. A build can apply it itself: its `settings.gradle` or

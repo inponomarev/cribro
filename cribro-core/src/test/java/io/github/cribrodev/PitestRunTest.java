@@ -24,6 +24,7 @@ import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -58,6 +59,22 @@ class PitestRunTest {
   @Test
   void pitLeavesItsOwnLaunchClasspathOffTheTestsClasspath() throws IOException {
     assertEquals("false", option(arguments(List.of()), "includeLaunchClasspath"));
+  }
+
+  /**
+   * On Windows the Java launcher expands a bare {@code *} argument into the file names of the
+   * working directory, so a run with no test glob names every test with a pattern that holds no
+   * wildcard character the launcher could match a file against.
+   */
+  @Test
+  void aRunWithNoTestGlobNamesEveryTestWithoutABareWildcard() throws IOException {
+    String targetTests = option(arguments(List.of()), "targetTests");
+    assertEquals(PitestRun.ALL_TESTS, targetTests);
+    assertEquals(true, targetTests.startsWith("~"), "a regular expression to PIT: " + targetTests);
+    assertEquals(
+        true,
+        Pattern.compile(targetTests.substring(1)).matcher("demo.CalcTest").matches(),
+        "matches a test class: " + targetTests);
   }
 
   /** The file keeps a long classpath off a command line that Windows limits to 32767 characters. */

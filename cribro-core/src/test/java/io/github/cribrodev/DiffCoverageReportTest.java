@@ -25,6 +25,7 @@ import io.github.cribrodev.DiffCoverageReport.Limits;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -98,8 +99,16 @@ class DiffCoverageReportTest {
    */
   private DiffCoverageReport measure(
       Map<String, NavigableSet<Integer>> changed, List<String> sourceRoots, JacocoLines lines) {
-    return DiffCoverageReport.measure(
-        changed, sourceRoots, lines, SourceLines.under(directory.toFile()));
+    // The sources written here are snippets without a package declaration, so each file is keyed
+    // by its path below the root, as a file whose declaration cannot be read is.
+    List<ChangedFile> files = new ArrayList<>();
+    for (Map.Entry<String, NavigableSet<Integer>> entry : changed.entrySet()) {
+      String key = ChangedLines.underSourceRoot(entry.getKey(), sourceRoots);
+      if (key != null) {
+        files.add(new ChangedFile(entry.getKey(), key, entry.getValue()));
+      }
+    }
+    return DiffCoverageReport.measure(files, lines, SourceLines.under(directory.toFile()));
   }
 
   /** Writes one source file of this module, whose first line is line 1. */

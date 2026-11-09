@@ -342,17 +342,18 @@ class DiffCoverageTaskRunTest {
   class TheFullReport {
 
     /**
-     * Builds a task over a repository holding one untracked source of count uncovered lines, whose
-     * text is {@code line1();} downwards, and the report that measures it.
+     * Builds a task over a repository holding one untracked source of count uncovered lines after
+     * its package declaration, each line's text naming its number as in {@code line2();}, and the
+     * report that measures it.
      */
     private DiffCoverageTask taskWithUncoveredLines(int count) throws Exception {
       repositoryWithOneCommit();
-      StringBuilder source = new StringBuilder();
+      StringBuilder source = new StringBuilder("package com.uber;\n");
       StringBuilder xml =
           new StringBuilder(
               "<report name=\"test\"><package name=\"com/uber\">"
                   + "<sourcefile name=\"A.java\">");
-      for (int number = 1; number <= count; number++) {
+      for (int number = 2; number <= count + 1; number++) {
         source.append("line").append(number).append("();\n");
         xml.append("<line nr=\"")
             .append(number)

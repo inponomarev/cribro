@@ -47,8 +47,9 @@ the `-Dtest` arguments that run only the test methods the change added or edited
 directory. Run those: what is left uncovered then is what the change's own tests do not exercise in the code it
 reaches. Write a test for a gap that the change made reachable, or say why it cannot happen.
 
-The report measures the tests of surefire's `default-test` execution. Only `.java` files under the main source
-directories count; Kotlin and Groovy changes are not measured. A build that skips the tests prints no report.
+The report measures the tests of surefire's `default-test` execution. Only `.java` and `.kt` files under the main
+source directories count, the `sourceDirs` of `kotlin-maven-plugin` included; Groovy changes are not measured. A build
+that skips the tests prints no report.
 
 ## Mutation testing
 
@@ -82,9 +83,9 @@ tests: a test that needs a database or a service the machine lacks is the usual 
 ## Which lines count as changed
 
 The changed lines are the diff between the working tree and the merge base of `HEAD` with the base ref, untracked
-`.java` files included. The base is `-Dcribro.diffBase=<ref>` when given, else the upstream branch, else `origin/HEAD`,
-`origin/main`, or `origin/master`. An upstream that is this branch pushed to a fork is skipped. For a stacked change,
-pass the parent branch: `-Dcribro.diffBase=<parent>`.
+`.java` and `.kt` files included. The base is `-Dcribro.diffBase=<ref>` when given, else the upstream branch, else
+`origin/HEAD`, `origin/main`, or `origin/master`. An upstream that is this branch pushed to a fork is skipped. For a
+stacked change, pass the parent branch: `-Dcribro.diffBase=<parent>`.
 
 ## Properties
 
@@ -105,9 +106,15 @@ Pass a property with `-D`, or set it in `.mvn/maven.config` or in the `<properti
 | `-Dcribro.pitestMaxFiles=<n>`, `-Dcribro.pitestMaxLinesPerFile=<n>`, `-Dcribro.pitestMaxLines=<n>` | `10`, `20`, `50` | How much of the mutation report the console shows |
 | `-Dcribro.pitestVersion=<v>` | `{{pitestVersion}}` | PIT version |
 | `-Dcribro.pitestJunit5PluginVersion=<v>` | `{{pitestJunit5PluginVersion}}` | Version of PIT's JUnit Platform plugin, added where the tests run on the JUnit Platform |
+| `-Dcribro.pitestPlugins=<coordinates>` | none | Further PIT plugins on PIT's classpath, comma-separated, such as `com.arcmutate:pitest-kotlin-plugin:1.5.2` |
 | `-Dcribro.jacocoVersion=<v>` | `{{jacocoVersion}}` | JaCoCo agent version for the test JVM, where the build attaches none of its own |
 
 The tests PIT runs need JDK 11 or later.
+
+Kotlin's compiler emits code the source does not show, such as null checks on parameters, and PIT drops the mutants of
+the cases it knows. The rest surface as live mutants on a changed line whose text gives no hint; Arcmutate's Kotlin
+plugin, free for open source, filters more of them, and `-Dcribro.pitestPlugins` adds it. A mutant in a Kotlin inline
+function called from a changed line is reported under the caller's line.
 
 ## Limits
 

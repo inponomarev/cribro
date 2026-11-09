@@ -20,6 +20,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -32,11 +33,12 @@ import java.util.regex.Pattern;
 /**
  * Reads and writes the changed lines of one module as a text file.
  *
- * <p>Each line of the file names one source file and its changed lines, separated by a tab, as in
- * {@code com/uber/nullaway/NullAway.java<TAB>12-14,40}. The path is relative to the source root, which is
- * the form a class file records through its package and its {@code SourceFile} attribute, so a
- * tool that sees only bytecode can match a mutant to the file. Lines starting with {@code #} are
- * comments.
+ * <p>Each line of the file names one source file by its {@link SourceFileKey}, then the file's path
+ * in the repository, then its changed lines, separated by tabs, as in {@code
+ * com/uber/nullaway/NullAway.java<TAB>nullaway/src/main/java/com/uber/nullaway/NullAway.java<TAB>12-14,40}.
+ * The key is the form a class file records through its package and its {@code SourceFile}
+ * attribute, so a tool that sees only bytecode can match a mutant to the file; the path is where the
+ * report finds the file's text. Lines starting with {@code #} are comments.
  *
  * <p>This class is loaded both by the build and by the PIT process, so it depends on nothing but
  * the JDK.
@@ -57,22 +59,35 @@ public final class ChangedLinesFile {
   /**
    * Writes the changed lines to a file, replacing whatever it held.
    *
+   * <p>Two files under one key, which happens where two source roots hold a file of one name in one
+   * package, are written as one entry with the lines of both, under the path of the first.
+   *
    * @param header comment lines written before the entries, without the leading {@code #}
-   * @param lines the changed line numbers, keyed by path relative to the source root; a path with
-   *     no line is left out
+   * @param files the changed files; a file with no changed line is left out
    */
-  public static void write(Path file, List<String> header, Map<String, NavigableSet<Integer>> lines)
+  public static void write(Path file, List<String> header, Collection<ChangedFile> files)
       throws IOException {
     StringBuilder text = new StringBuilder();
     for (String comment : header) {
       text.append("# ").append(comment).append('\n');
     }
-    for (Map.Entry<String, NavigableSet<Integer>> entry : lines.entrySet()) {
+    Map<String, String> paths = new LinkedHashMap<>();
+    Map<String, NavigableSet<Integer>> lines = new LinkedHashMap<>();
+    for (ChangedFile changed : files) {
       // A file with no changed line has no entry, so every entry the reader parses names a line.
-      if (entry.getValue().isEmpty()) {
+      if (changed.lines().isEmpty()) {
         continue;
       }
-      text.append(entry.getKey()).append('\t').append(ranges(entry.getValue())).append('\n');
+      paths.putIfAbsent(changed.key(), changed.path());
+      lines.computeIfAbsent(changed.key(), unused -> new TreeSet<>()).addAll(changed.lines());
+    }
+    for (Map.Entry<String, NavigableSet<Integer>> entry : lines.entrySet()) {
+      text.append(entry.getKey())
+          .append('\t')
+          .append(paths.get(entry.getKey()))
+          .append('\t')
+          .append(ranges(entry.getValue()))
+          .append('\n');
     }
     Files.createDirectories(file.getParent());
     Files.writeString(file, text, StandardCharsets.UTF_8);
@@ -88,17 +103,11 @@ public final class ChangedLinesFile {
     return null;
   }
 
-  /** Returns the changed line numbers the file holds, keyed by path relative to the source root. */
+  /** Returns the changed line numbers the file holds, keyed by {@link SourceFileKey}. */
   public static Map<String, NavigableSet<Integer>> read(Path file) throws IOException {
     Map<String, NavigableSet<Integer>> lines = new LinkedHashMap<>();
-    for (String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
-      if (line.isEmpty() || line.startsWith("#")) {
-        continue;
-      }
+    for (String line : entries(file)) {
       int tab = line.lastIndexOf('\t');
-      if (tab < 0) {
-        throw new IOException("No tab in " + file + " line: " + line);
-      }
       NavigableSet<Integer> numbers = new TreeSet<>();
       for (String range : line.substring(tab + 1).split(",")) {
         int dash = range.indexOf('-');
@@ -108,16 +117,52 @@ public final class ChangedLinesFile {
           numbers.add(number);
         }
       }
-      lines.put(line.substring(0, tab), numbers);
+      lines.put(key(line), numbers);
     }
     return lines;
+  }
+
+  /**
+   * Returns the repository-relative path of each file the file holds, keyed by {@link
+   * SourceFileKey}; an entry written without a path is left out.
+   */
+  public static Map<String, String> readPaths(Path file) throws IOException {
+    Map<String, String> paths = new LinkedHashMap<>();
+    for (String line : entries(file)) {
+      int first = line.indexOf('\t');
+      int last = line.lastIndexOf('\t');
+      if (first < last) {
+        paths.put(key(line), line.substring(first + 1, last));
+      }
+    }
+    return paths;
+  }
+
+  /** Returns the lines of the file that hold an entry, after checking that each has its tab. */
+  private static List<String> entries(Path file) throws IOException {
+    List<String> entries = new ArrayList<>();
+    for (String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
+      if (line.isEmpty() || line.startsWith("#")) {
+        continue;
+      }
+      if (line.indexOf('\t') < 0) {
+        throw new IOException("No tab in " + file + " line: " + line);
+      }
+      entries.add(line);
+    }
+    return entries;
+  }
+
+  private static String key(String entry) {
+    return entry.substring(0, entry.indexOf('\t'));
   }
 
   /**
    * Returns the PIT {@code targetClasses} patterns for every class a changed file can compile to.
    *
    * <p>A source file compiles to its own top-level class, the classes nested in it, and any other
-   * top-level class it declares, which carries a name of its own. So each changed file contributes
+   * top-level class it declares, which carries a name of its own; a Kotlin file also compiles its
+   * top-level functions to a facade class named after the file. So each changed file contributes
    * every class of its package, and the interceptor keeps only the mutants whose class records the
    * changed file as its source. {@code package-info.java} and {@code module-info.java} compile to no
    * class PIT mutates and contribute nothing.
@@ -126,12 +171,12 @@ public final class ChangedLinesFile {
    * PIT's {@code *} also matches subpackages. PIT escapes every {@code +} in the expression, so the
    * pattern repeats a character class instead of using {@code +}.
    *
-   * @param lines the changed line numbers, keyed by path relative to the source root
+   * @param keys the {@link SourceFileKey} of each changed file
    */
-  public static List<String> targetClasses(Map<String, NavigableSet<Integer>> lines) {
+  public static List<String> targetClasses(Collection<String> keys) {
     Set<String> patterns = new LinkedHashSet<>();
-    for (String path : lines.keySet()) {
-      if (!path.endsWith(".java")
+    for (String path : keys) {
+      if (!SourceFileKey.isSource(path)
           || path.endsWith("package-info.java")
           || path.endsWith("module-info.java")) {
         continue;

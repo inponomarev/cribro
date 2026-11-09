@@ -45,8 +45,9 @@ gradlePlugin {
             implementationClass = "io.github.cribrodev.CribroSettingsPlugin"
             displayName = "cribro: diff coverage and diff mutation testing"
             description = "Reports which lines a branch changed that the tests do not execute (JaCoCo) " +
-                "and which changed lines the tests do not check (PIT), as plain text for an AI agent"
-            tags = listOf("coverage", "jacoco", "pitest", "mutation-testing", "diff-coverage")
+                "and which changed lines the tests do not check (PIT), for Java and Kotlin sources, " +
+                "as plain text for an AI agent"
+            tags = listOf("coverage", "jacoco", "pitest", "mutation-testing", "diff-coverage", "kotlin")
         }
     }
 }

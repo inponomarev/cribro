@@ -176,7 +176,9 @@ public final class JacocoLines {
           sourceFile = null;
           break;
         case "sourcefile":
-          String key = packageName + "/" + xml.getAttributeValue(null, "name");
+          // The default package is named "", and a file in it is keyed by its name alone.
+          String name = xml.getAttributeValue(null, "name");
+          String key = packageName == null || packageName.isEmpty() ? name : packageName + "/" + name;
           sourceFile = wanted.test(key) ? key : null;
           if (sourceFile != null) {
             builder.sourceFile(sourceFile);

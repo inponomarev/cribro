@@ -15,6 +15,7 @@
  */
 package io.github.cribrodev;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.ArrayList;
@@ -79,7 +80,7 @@ public final class ChangedLines {
     return commit;
   }
 
-  /** Returns the changed lines of every Java file, keyed by repository-relative path. */
+  /** Returns the changed lines of every Java and Kotlin file, keyed by repository-relative path. */
   public Map<String, NavigableSet<Integer>> lines() {
     return lines;
   }
@@ -191,17 +192,20 @@ public final class ChangedLines {
    * that file leaves the report with nothing to show that it happened.
    */
   static List<String> diffCommand(String base) {
-    return List.of(
-        "-c",
-        "core.quotePath=false",
-        "diff",
-        "--unified=0",
-        "--no-color",
-        "--src-prefix=a/",
-        "--dst-prefix=b/",
-        base,
-        "--",
-        "*.java");
+    List<String> command =
+        new ArrayList<>(
+            List.of(
+                "-c",
+                "core.quotePath=false",
+                "diff",
+                "--unified=0",
+                "--no-color",
+                "--src-prefix=a/",
+                "--dst-prefix=b/",
+                base,
+                "--"));
+    command.addAll(SourceFileKey.pathspecs());
+    return command;
   }
 
   /** Returns whether the ref names a commit of this repository. */
@@ -210,7 +214,7 @@ public final class ChangedLines {
   }
 
   /**
-   * Returns the changed lines of every Java file, keyed by repository-relative path.
+   * Returns the changed lines of every Java and Kotlin file, keyed by repository-relative path.
    *
    * <p>Two sources are merged: the post-image lines of the diff between base and the working tree,
    * which covers committed, staged and unstaged changes alike, and every line of an untracked
@@ -224,15 +228,11 @@ public final class ChangedLines {
     Map<String, NavigableSet<Integer>> changed = UnifiedDiff.parse(diff);
     // core.quotePath is off here for the reason diffCommand gives: a quoted path names no file
     // this JVM can open, and the file would be reported as unreadable rather than measured.
-    String untracked =
-        git.output(
-            "-c",
-            "core.quotePath=false",
-            "ls-files",
-            "--others",
-            "--exclude-standard",
-            "--",
-            "*.java");
+    List<String> lsFiles =
+        new ArrayList<>(
+            List.of("-c", "core.quotePath=false", "ls-files", "--others", "--exclude-standard", "--"));
+    lsFiles.addAll(SourceFileKey.pathspecs());
+    String untracked = git.output(lsFiles.toArray(new String[0]));
     if (untracked.isEmpty()) {
       return changed;
     }
@@ -259,20 +259,26 @@ public final class ChangedLines {
   }
 
   /**
-   * Returns the entries whose path lies under one of the source roots, keyed by the path relative
-   * to the innermost root that contains it, which is how {@link ChangedLinesFile} names a file for
-   * PIT.
+   * Returns the files whose path lies under one of the source roots, ordered by path, each under
+   * the {@link SourceFileKey} read from the working tree, which is how a JaCoCo report and a PIT
+   * mutant name the file.
+   *
+   * @param repository the repository root, where the files are read from
+   * @param changed the changed lines, keyed by repository-relative path
+   * @param sourceRoots repository-relative source directories of the module
    */
-  public static Map<String, NavigableSet<Integer>> underSourceRoots(
-      Map<String, NavigableSet<Integer>> changed, List<String> sourceRoots) {
-    Map<String, NavigableSet<Integer>> relative = new TreeMap<>();
-    for (Map.Entry<String, NavigableSet<Integer>> entry : changed.entrySet()) {
-      String key = underSourceRoot(entry.getKey(), sourceRoots);
-      if (key != null) {
-        relative.put(key, entry.getValue());
+  public static List<ChangedFile> underSourceRoots(
+      File repository, Map<String, NavigableSet<Integer>> changed, List<String> sourceRoots) {
+    List<ChangedFile> files = new ArrayList<>();
+    for (Map.Entry<String, NavigableSet<Integer>> entry : new TreeMap<>(changed).entrySet()) {
+      String path = entry.getKey();
+      String relative = underSourceRoot(path, sourceRoots);
+      if (relative != null) {
+        files.add(
+            new ChangedFile(path, SourceFileKey.of(repository, path, relative), entry.getValue()));
       }
     }
-    return relative;
+    return files;
   }
 
   /**

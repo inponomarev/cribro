@@ -17,7 +17,6 @@ package io.github.cribrodev;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.Map;
 import org.gradle.api.DefaultTask;
 import org.gradle.api.file.RegularFileProperty;
 import org.gradle.api.provider.ListProperty;
@@ -31,9 +30,9 @@ import org.gradle.api.tasks.UntrackedTask;
 /**
  * Writes the lines this branch changed in one module's main sources to a {@link ChangedLinesFile}.
  *
- * <p>The file holds only files under the module's source roots, with paths relative to the root
- * that contains them, so it is empty for a module the change did not reach. Untracked Java files
- * count as changed in full.
+ * <p>The file holds only files under the module's source roots, each under the key a class
+ * compiled from it records, so it is empty for a module the change did not reach. Untracked Java
+ * and Kotlin files count as changed in full.
  */
 @UntrackedTask(
     because = "the working tree and the branch decide the result, and Gradle tracks neither")
@@ -57,12 +56,13 @@ public abstract class ChangedLinesTask extends DefaultTask {
 
   @TaskAction
   public void write() throws IOException {
-    ChangedLines diff = getGit().get().git().changedLines(getBaseRef().getOrNull());
+    Git git = getGit().get().git();
+    ChangedLines diff = git.changedLines(getBaseRef().getOrNull());
     if (diff == null) {
       getLogger().warn("No base ref resolved, so no line counts as changed. {}",
           ChangedLines.noBaseHint("-P"));
       ChangedLinesFile.write(
-          getOutputFile().get().getAsFile().toPath(), List.of("no base ref resolved"), Map.of());
+          getOutputFile().get().getAsFile().toPath(), List.of("no base ref resolved"), List.of());
       return;
     }
     for (String note : diff.unreadable()) {
@@ -71,6 +71,6 @@ public abstract class ChangedLinesTask extends DefaultTask {
     ChangedLinesFile.write(
         getOutputFile().get().getAsFile().toPath(),
         List.of("against " + diff.ref() + " (" + diff.shortCommit() + ")"),
-        ChangedLines.underSourceRoots(diff.lines(), getSourceRoots().get()));
+        ChangedLines.underSourceRoots(git.repositoryRoot(), diff.lines(), getSourceRoots().get()));
   }
 }

@@ -1,9 +1,9 @@
 # cribro
 
 Reports which lines a branch changed that the tests do not execute (JaCoCo) and which changed lines the tests do not
-check (PIT), for a Gradle or Maven build with Java sources. The build can apply cribro itself, or cribro can be loaded
-into a build that knows nothing about it. For Maven, see [Maven](#maven). The output is plain text sized for an AI
-agent; there is no HTML report of its own.
+check (PIT), for a Gradle or Maven build with Java or Kotlin sources. The build can apply cribro itself, or cribro can
+be loaded into a build that knows nothing about it. For Maven, see [Maven](#maven). The output is plain text sized for
+an AI agent; there is no HTML report of its own.
 
 On [pgjdbc/pgjdbc#4036](https://github.com/pgjdbc/pgjdbc/pull/4036), `test` ends with a block like this one, cut here
 to one file:
@@ -30,11 +30,19 @@ A Gradle build needs:
 - Gradle 8.0 or later, running on JDK 11 or later (Gradle 9 itself needs JDK 17). Nothing older than 8.14 has been
   tried.
 - Tests that run on JDK 11 or later, since PIT loads this plugin's classes into the test JVM.
-- Java sources under the `java` plugin's source sets; Kotlin and Groovy sources are not measured.
+- Java or Kotlin sources under the main source set of the `java` plugin, which the Kotlin JVM plugin applies;
+  `src/main/kotlin` counts. Groovy sources, Kotlin Multiplatform, and Android builds are not measured.
 - JUnit 4, or JUnit Jupiter or Vintage on the JUnit Platform, for `pitestDiff`.
 
 A Maven build has its own list, in [Requirements for Maven](#requirements-for-maven). To build cribro itself, for
 either build tool, you need a JDK 25 where Gradle finds it, for example as `JAVA_HOME`. The build does not download one.
+
+A changed file is matched to its JaCoCo counters and its PIT mutants by the package it declares and its name, which is
+what its class files record, so a Kotlin file whose directory spells no part of its package is still measured. PIT
+drops the mutants of the Kotlin compiler-generated code it knows about, such as null checks on parameters; the rest
+surface as live mutants on a changed line whose text gives no hint. Arcmutate's Kotlin plugin, free for open source,
+filters more of them, and `-Pcribro.pitestPlugins=com.arcmutate:pitest-kotlin-plugin:<version>` puts it on PIT's
+classpath.
 
 Tried on pgjdbc (Gradle 9.4.1 and 9.7.1, JUnit Jupiter), NullAway (Gradle 9.8.1, JUnit 4), and a one-class build on
 Gradle 8.14.3 whose tests have no `junit-platform-launcher` dependency. CI runs `test pitestDiff` through the init
@@ -104,7 +112,7 @@ this change out of a repository that others build.
    a note in `AGENTS.md`, or in whichever file the project's agents read, needs only to name that command:
 
    ```markdown
-   After changing the Java sources under `src/main` of a module, run `./gradlew <project>:test`, where
+   After changing the Java or Kotlin sources under `src/main` of a module, run `./gradlew <project>:test`, where
    `<project>` is that module's Gradle project path, such as `:app`, and act on the diff coverage report it
    prints. `./gradlew -q cribro` prints how to read the reports and how to run mutation testing.
    ```
@@ -234,6 +242,8 @@ before Maven's build summary. Its goal `cribro:pitest-diff` runs PIT on the chan
 - Maven 3.9 running on JDK 11 or later; tried on 3.9.16. Maven 4 has not been tried.
 - CI tests the extension on JDK 17 and later. It is compiled for JDK 11, but no test runs Maven on JDK 11.
 - Tests run by surefire's `default-test` execution, in a forked JVM.
+- Java sources under the compile source roots, or Kotlin sources under those roots or the `sourceDirs` of
+  `kotlin-maven-plugin`.
 - For `cribro:pitest-diff`: tests on JUnit 4, or on JUnit Jupiter or Vintage on the JUnit Platform, in a JVM of JDK 11
   or later.
 
@@ -296,8 +306,9 @@ machine that ran step 1 below.
    build loads, so a note in `AGENTS.md`, or in whichever file the project's agents read, needs only to name it:
 
    ```markdown
-   After changing the Java sources under `src/main` of a module, run `mvn -pl <module> -am test`, where `<module>`
-   is the module whose tests exercise the change, such as `:app`, and act on the diff coverage report it prints.
+   After changing the Java or Kotlin sources under `src/main` of a module, run `mvn -pl <module> -am test`, where
+   `<module>` is the module whose tests exercise the change, such as `:app`, and act on the diff coverage report it
+   prints.
    `mvn -q cribro:guide` prints how to read the reports and how to run mutation testing.
    ```
 

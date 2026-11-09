@@ -144,7 +144,7 @@ public abstract class PitestDiffTask extends DefaultTask {
   /** Returns whether the changed lines include a class of the main sources to mutate. */
   public boolean hasTargetClasses() throws IOException {
     return !ChangedLinesFile.targetClasses(
-            ChangedLinesFile.read(getChangedLinesFile().get().getAsFile().toPath()))
+            ChangedLinesFile.read(getChangedLinesFile().get().getAsFile().toPath()).keySet())
         .isEmpty();
   }
 
@@ -159,7 +159,7 @@ public abstract class PitestDiffTask extends DefaultTask {
     File log = new File(reportDir, PitestRun.LOG);
     PitestRun pit =
         new PitestRun()
-            .targetClasses(ChangedLinesFile.targetClasses(ChangedLinesFile.read(changedLines)))
+            .targetClasses(ChangedLinesFile.targetClasses(ChangedLinesFile.read(changedLines).keySet()))
             .reportDir(reportDir)
             .targetTests(getTargetTests().getOrNull())
             .mutableCodePaths(List.copyOf(getMainClassesDirs().getFiles()))

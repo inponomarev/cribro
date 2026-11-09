@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -79,7 +80,33 @@ class PitestSurvivorsTest {
         "against origin/master (abc), all tests",
         mutantsFile(mutations).toFile(),
         repository.toFile(),
-        List.of(new File("absent"), sources.toFile()));
+        List.of(new File("absent"), sources.toFile()),
+        Map.of());
+  }
+
+  /**
+   * A Kotlin file may lie in a directory that spells no part of its package, so no source root
+   * finds it under its key; the changed-lines file names where it is.
+   */
+  @Test
+  void aFileTheChangedLinesFileNamesIsReadFromThatPathRatherThanSearchedFor() throws IOException {
+    Path source = repository.resolve("src/main/kotlin/A.kt");
+    Files.createDirectories(source.getParent());
+    Files.writeString(source, "a1\nreturn a\n");
+    PitestSurvivors report =
+        PitestSurvivors.read(
+            "against origin/master (abc), all tests",
+            mutantsFile(mutation("SURVIVED", "AKt", "A.kt", 2, "removed call")).toFile(),
+            repository.toFile(),
+            List.of(repository.resolve("src/main/kotlin").toFile()),
+            Map.of("com/x/A.kt", "src/main/kotlin/A.kt"));
+
+    assertEquals(
+        List.of("  src/main/kotlin/A.kt", "    2: return a", "        survived: removed call, in m"),
+        report.render(DiffCoverageReport.Limits.NONE, List.of()).lines()
+            .filter(line -> line.startsWith("  "))
+            .filter(line -> !line.startsWith("  -") && !line.startsWith("  1 mutant") && !line.startsWith("  ordered"))
+            .toList());
   }
 
   @Test
@@ -284,7 +311,8 @@ class PitestSurvivorsTest {
             "against origin/master (abc), all tests",
             build.resolve("mutants.tsv").toFile(),
             repository.toFile(),
-            List.of(repository.toFile()));
+            List.of(repository.toFile()),
+            Map.of());
 
     assertEquals(
         "Mutation testing of changed lines against origin/master (abc), all tests\n"
@@ -316,7 +344,8 @@ class PitestSurvivorsTest {
             "against origin/master (abc), all tests",
             mutantsFile(mutation("SURVIVED", "A", "A.java", 1, "removed call")).toFile(),
             repository.toFile(),
-            List.of(sources.toFile()));
+            List.of(sources.toFile()),
+            Map.of());
 
     assertEquals(
         "Mutation testing of changed lines against origin/master (abc), all tests\n"

@@ -56,15 +56,35 @@ class ChangedLinesFileTest {
     assertEquals("3,5-6,9", ChangedLinesFile.ranges(lines(3, 5, 6, 9)));
   }
 
+  /** Returns a changed file under {@code src/}, keyed by its path below that root. */
+  private static ChangedFile changed(String key, NavigableSet<Integer> lines) {
+    return new ChangedFile("src/" + key, key, lines);
+  }
+
   @Test
   void aFileReadsBackToTheLinesItWasWrittenFrom() throws IOException {
     Path file = directory.resolve("changed-lines.txt");
-    Map<String, NavigableSet<Integer>> written =
-        Map.of("a/B.java", lines(1, 2, 3, 7), "C.java", lines(12));
 
-    ChangedLinesFile.write(file, List.of("against origin/master (abc)"), written);
+    ChangedLinesFile.write(
+        file,
+        List.of("against origin/master (abc)"),
+        List.of(changed("a/B.java", lines(1, 2, 3, 7)), changed("C.java", lines(12))));
 
-    assertEquals(written, ChangedLinesFile.read(file));
+    assertEquals(
+        Map.of("a/B.java", lines(1, 2, 3, 7), "C.java", lines(12)), ChangedLinesFile.read(file));
+  }
+
+  @Test
+  void aFileReadsBackToThePathOfEachEntry() throws IOException {
+    Path file = directory.resolve("changed-lines.txt");
+
+    ChangedLinesFile.write(
+        file,
+        List.of(),
+        List.of(new ChangedFile("m/src/main/kotlin/Calc.kt", "demo/math/Calc.kt", lines(3))));
+
+    assertEquals(
+        Map.of("demo/math/Calc.kt", "m/src/main/kotlin/Calc.kt"), ChangedLinesFile.readPaths(file));
   }
 
   @Test
@@ -72,9 +92,25 @@ class ChangedLinesFileTest {
     Path file = directory.resolve("changed-lines.txt");
 
     ChangedLinesFile.write(
-        file, List.of(), Map.of("a/Empty.java", lines(), "a/B.java", lines(4)));
+        file, List.of(), List.of(changed("a/Empty.java", lines()), changed("a/B.java", lines(4))));
 
     assertEquals(Map.of("a/B.java", lines(4)), ChangedLinesFile.read(file));
+  }
+
+  /** Two source roots can each hold a file of one name in one package. */
+  @Test
+  void twoFilesUnderOneKeyAreWrittenAsOneEntryWithTheLinesOfBoth() throws IOException {
+    Path file = directory.resolve("changed-lines.txt");
+
+    ChangedLinesFile.write(
+        file,
+        List.of(),
+        List.of(
+            new ChangedFile("gen/a/B.java", "a/B.java", lines(7)),
+            new ChangedFile("src/a/B.java", "a/B.java", lines(2))));
+
+    assertEquals(Map.of("a/B.java", lines(2, 7)), ChangedLinesFile.read(file));
+    assertEquals(Map.of("a/B.java", "gen/a/B.java"), ChangedLinesFile.readPaths(file));
   }
 
   @Test
@@ -82,14 +118,16 @@ class ChangedLinesFileTest {
     Path file = directory.resolve("changed-lines.txt");
 
     ChangedLinesFile.write(
-        file, List.of("against origin/master (abc)", "second"), Map.of("B.java", lines(1)));
+        file,
+        List.of("against origin/master (abc)", "second"),
+        List.of(changed("B.java", lines(1))));
 
     assertEquals("against origin/master (abc)", ChangedLinesFile.readHeader(file));
   }
 
   /** Returns the classes among the names that PIT selects with the patterns for the changed lines. */
   private static List<String> targeted(Map<String, NavigableSet<Integer>> changed, String... names) {
-    List<String> patterns = ChangedLinesFile.targetClasses(changed);
+    List<String> patterns = ChangedLinesFile.targetClasses(changed.keySet());
     return Arrays.stream(names)
         .filter(name -> patterns.stream().anyMatch(pattern -> new Glob(pattern).matches(name)))
         .toList();
@@ -118,19 +156,41 @@ class ChangedLinesFileTest {
     assertEquals(List.of("A", "Helper"), targeted(Map.of("A.java", lines(1)), "A", "Helper", "com.x.B"));
   }
 
+  /** A Kotlin file compiles to the classes it declares and to a facade class named after it. */
+  @Test
+  void aChangedKotlinFileTargetsEveryClassOfItsPackage() {
+    assertEquals(
+        List.of("demo.math.Calc", "demo.math.CalcKt"),
+        targeted(Map.of("demo/math/Calc.kt", lines(3)), "demo.math.Calc", "demo.math.CalcKt", "demo.Other"));
+  }
+
   @Test
   void packageAndModuleInfoAreNotTargeted() {
     assertEquals(
         List.of(),
-        ChangedLinesFile.targetClasses(
-            Map.of("com/x/package-info.java", lines(1), "module-info.java", lines(2))));
+        ChangedLinesFile.targetClasses(List.of("com/x/package-info.java", "module-info.java")));
+  }
+
+  @Test
+  void aFileOfAnotherLanguageIsNotTargeted() {
+    assertEquals(List.of(), ChangedLinesFile.targetClasses(List.of("com/x/A.groovy")));
   }
 
   @Test
   void commentsAndBlankLinesAreSkipped() throws IOException {
     Path file = directory.resolve("changed-lines.txt");
-    Files.writeString(file, "# against origin/master\n\na/B.java\t3-5,9\n");
+    Files.writeString(file, "# against origin/master\n\na/B.java\tsrc/a/B.java\t3-5,9\n");
 
     assertEquals(Map.of("a/B.java", lines(3, 4, 5, 9)), ChangedLinesFile.read(file));
+  }
+
+  /** An entry of an earlier format, with no path, still reads to its lines and names no path. */
+  @Test
+  void anEntryWithoutAPathReadsToItsLinesAlone() throws IOException {
+    Path file = directory.resolve("changed-lines.txt");
+    Files.writeString(file, "a/B.java\t3\n");
+
+    assertEquals(Map.of("a/B.java", lines(3)), ChangedLinesFile.read(file));
+    assertEquals(Map.of(), ChangedLinesFile.readPaths(file));
   }
 }

@@ -339,7 +339,11 @@ final class CoverageReport {
     JacocoLines.Builder lines = new JacocoLines.Builder();
     for (IPackageCoverage packageCoverage : bundle.getPackages()) {
       for (ISourceFileCoverage sourceFile : packageCoverage.getSourceFiles()) {
-        String key = packageCoverage.getName() + "/" + sourceFile.getName();
+        // The default package is named "", and a file in it is keyed by its name alone.
+        String key =
+            packageCoverage.getName().isEmpty()
+                ? sourceFile.getName()
+                : packageCoverage.getName() + "/" + sourceFile.getName();
         lines.sourceFile(key);
         for (int number = sourceFile.getFirstLine(); number <= sourceFile.getLastLine(); number++) {
           ILine line = sourceFile.getLine(number);

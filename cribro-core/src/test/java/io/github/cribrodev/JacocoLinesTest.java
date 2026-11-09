@@ -137,6 +137,20 @@ class JacocoLinesTest {
     void aSourceFileTheReportMentionsIsCovered() throws IOException {
       assertTrue(read("").covers(KEY));
     }
+
+    /** JaCoCo names the default package with an empty string, which no key spells out. */
+    @Test
+    void aSourceFileInTheDefaultPackageIsKeyedByItsNameAlone() throws IOException {
+      File file = new File(directory.toFile(), "default.xml");
+      Files.writeString(
+          file.toPath(),
+          "<report name=\"test\"><package name=\"\"><sourcefile name=\"A.java\">"
+              + "<line nr=\"1\" mi=\"0\" ci=\"4\" mb=\"0\" cb=\"0\"/></sourcefile></package></report>");
+      JacocoLines lines = JacocoLines.read(List.of(file));
+      assertAll(
+          () -> assertTrue(lines.covers("A.java"), "A.java"),
+          () -> assertFalse(lines.covers("/A.java"), "/A.java"));
+    }
   }
 
   @Nested

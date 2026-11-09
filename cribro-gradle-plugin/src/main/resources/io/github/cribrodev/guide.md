@@ -44,7 +44,7 @@ uncovered then is what the change's own tests do not exercise in the code it rea
 new test never sets. Write a test for a gap that the change made reachable, or say why it cannot happen.
 
 `{{gradlew}} <project>:diffCoverage` prints the report again from the last test run without running the tests. Only
-`.java` files under the main source sets of the `java` plugin count; Kotlin and Groovy changes are not measured.
+`.java` and `.kt` files under the main source set count, `src/main/kotlin` included; Groovy changes are not measured.
 
 ## Mutation testing
 
@@ -73,9 +73,9 @@ needs a database or a service the machine lacks is the usual cause.
 ## Which lines count as changed
 
 The changed lines are the diff between the working tree and the merge base of `HEAD` with the base ref, untracked
-`.java` files included. The base is `-Pcribro.diffBase=<ref>` when given, else the upstream branch, else `origin/HEAD`,
-`origin/main`, or `origin/master`. An upstream that is this branch pushed to a fork is skipped. For a stacked change,
-pass the parent branch: `-Pcribro.diffBase=<parent>`.
+`.java` and `.kt` files included. The base is `-Pcribro.diffBase=<ref>` when given, else the upstream branch, else
+`origin/HEAD`, `origin/main`, or `origin/master`. An upstream that is this branch pushed to a fork is skipped. For a
+stacked change, pass the parent branch: `-Pcribro.diffBase=<parent>`.
 
 ## Properties
 
@@ -92,9 +92,15 @@ pass the parent branch: `-Pcribro.diffBase=<parent>`.
 | `-Pcribro.pitestShowAll` | off | Prints the whole mutation report to the console |
 | `-Pcribro.pitestMaxFiles=<n>`, `-Pcribro.pitestMaxLinesPerFile=<n>`, `-Pcribro.pitestMaxLines=<n>` | `10`, `20`, `50` | How much of the mutation report the console shows |
 | `-Pcribro.pitestVersion=<v>` | `{{pitestVersion}}` | PIT version |
+| `-Pcribro.pitestPlugins=<coordinates>` | none | Further PIT plugins on PIT's classpath, comma-separated, such as `com.arcmutate:pitest-kotlin-plugin:1.5.2` |
 | `-Pcribro.jacocoVersion=<v>` | the build's, else `{{jacocoVersion}}` | JaCoCo version for the test JVM |
 
 The tests PIT runs need JDK 11 or later.
+
+Kotlin's compiler emits code the source does not show, such as null checks on parameters, and PIT drops the mutants of
+the cases it knows. The rest surface as live mutants on a changed line whose text gives no hint; Arcmutate's Kotlin
+plugin, free for open source, filters more of them, and `-Pcribro.pitestPlugins` adds it. A mutant in a Kotlin inline
+function called from a changed line is reported under the caller's line.
 
 ## Limits
 

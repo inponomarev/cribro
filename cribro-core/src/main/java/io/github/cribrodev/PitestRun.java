@@ -51,6 +51,17 @@ public final class PitestRun {
   /** How many lines of {@link #LOG} a failure prints. */
   private static final int LOG_TAIL = 30;
 
+  /**
+   * The {@code targetTests} filter that lets every test kill a mutant, where the caller names none.
+   *
+   * <p>It is a regular expression rather than the glob {@code *} because on Windows the Java
+   * launcher expands an argument that is a bare wildcard into the names of the files in the
+   * working directory, so PIT would be told to run a test class named {@code .git}. The launcher
+   * leaves {@code ~.*} alone unless a file in that directory starts with {@code ~.}. PIT escapes a
+   * {@code +} in a pattern, so {@code .+} would match nothing.
+   */
+  public static final String ALL_TESTS = "~.*";
+
   private List<String> targetClasses = List.of();
   private File reportDir;
   private File changedLines;
@@ -161,7 +172,7 @@ public final class PitestRun {
     Map<String, String> options = new LinkedHashMap<>();
     options.put("reportDir", reportDir.getAbsolutePath());
     options.put("targetClasses", String.join(",", targetClasses));
-    options.put("targetTests", targetTests == null ? "*" : targetTests);
+    options.put("targetTests", targetTests == null ? ALL_TESTS : targetTests);
     // Only these directories are mutated, so a glob cannot reach a test class of the same name.
     options.put("mutableCodePaths", paths(mutableCodePaths));
     options.put("sourceDirs", paths(sourceDirs));
@@ -248,9 +259,11 @@ public final class PitestRun {
    * Reads the mutants a successful run left in the report directory, writes the whole report to
    * {@code survivors.txt} there, and returns the text to print.
    *
-   * @param changedLines the {@link ChangedLinesFile} the run read, whose header names the base
+   * @param changedLines the {@link ChangedLinesFile} the run read, whose header names the base and
+   *     whose entries name the path of each changed file
    * @param targetTests the glob the run was given, or null
-   * @param sourceDirs absolute source directories, searched in order for the mutated file
+   * @param sourceDirs absolute source directories, searched in order for a mutated file the
+   *     changed-lines file does not name
    */
   public static String report(
       File changedLines,
@@ -270,7 +283,8 @@ public final class PitestRun {
             (header == null ? "against an unknown base" : header) + ", " + tests,
             new File(reportDir, MutantsFile.NAME),
             repository,
-            sourceDirs);
+            sourceDirs,
+            ChangedLinesFile.readPaths(changedLines.toPath()));
     return report.writeAndRender(
         repository,
         new File(reportDir, "survivors.txt"),

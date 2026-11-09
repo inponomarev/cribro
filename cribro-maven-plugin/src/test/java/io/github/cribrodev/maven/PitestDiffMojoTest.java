@@ -258,7 +258,7 @@ class PitestDiffMojoTest {
     select(pit, null, new SurefireConfiguration(), new ArrayList<>());
 
     List<String> arguments = pit.arguments();
-    assertEquals("*", arguments.get(arguments.indexOf("--targetTests") + 1));
+    assertEquals(PitestRun.ALL_TESTS, arguments.get(arguments.indexOf("--targetTests") + 1));
   }
 
   /** Surefire excludes a file in any directory, and PIT a class in any package. */
