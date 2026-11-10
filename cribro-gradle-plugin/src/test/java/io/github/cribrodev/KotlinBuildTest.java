@@ -52,7 +52,7 @@ class KotlinBuildTest {
   private void writeBuild() throws IOException {
     Files.writeString(
         build.resolve("settings.gradle"),
-        "plugins { id 'io.github.cribrodev.cribro' }\nrootProject.name = 'demo'\n",
+        "plugins { id '" + CribroSettingsPlugin.ID + "' }\nrootProject.name = 'demo'\n",
         UTF_8);
     Files.writeString(
         build.resolve("build.gradle"),
