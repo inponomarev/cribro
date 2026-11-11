@@ -194,10 +194,10 @@ public final class PitestSurvivors {
    *     no mutant on the changed lines and wrote no report
    * @param repository the directory the printed paths are relative to
    * @param sourceRoots absolute source directories, searched in order for a mutated file that
-   *     {@code paths} does not name
+   *     {@code paths} does not name or names at a path that no longer exists
    * @param paths the repository-relative path of each changed file, keyed by {@link
    *     SourceFileKey}, as the {@link ChangedLinesFile} of the run records them; a Kotlin file may
-   *     lie in a directory that spells no part of its package, so its key alone finds no file
+   *     lie in a directory that does not follow its package, so its key alone finds no file
    */
   public static PitestSurvivors read(
       String scope,
@@ -229,10 +229,9 @@ public final class PitestSurvivors {
                       shortTestNames.computeIfAbsent(test, PitestSurvivors::shortTestName)));
       int packageEnd = mutant.mutatedClass().lastIndexOf('.');
       String relative =
-          (packageEnd < 0
-                  ? ""
-                  : mutant.mutatedClass().substring(0, packageEnd).replace('.', '/') + "/")
-              + mutant.sourceFile();
+          SourceFileKey.of(
+              packageEnd < 0 ? "" : mutant.mutatedClass().substring(0, packageEnd).replace('.', '/'),
+              mutant.sourceFile());
       String description =
           (mutant.status().equals("NO_COVERAGE") ? "no test reaches it: " : "survived: ")
               + DESCRIPTION_SUFFIX.matcher(mutant.description()).replaceFirst("");

@@ -41,10 +41,13 @@ have set up.
 After a run of the whole suite, old tests execute most of that code under the old conditions, so the block ends with
 the `--tests` arguments that run only the test methods the change added or edited. Run those: what is left
 uncovered then is what the change's own tests do not exercise in the code it reaches, such as a literal in a mode the
-new test never sets. Write a test for a gap that the change made reachable, or say why it cannot happen.
+new test never sets. Write a test for a gap that the change made reachable, or say why it cannot happen. The block is
+built from the changed `.java` files only; a change to a `.kt` file adds no method and no `--tests` argument to it.
 
 `{{gradlew}} <project>:diffCoverage` prints the report again from the last test run without running the tests. Only
 `.java` and `.kt` files under the main source set count, `src/main/kotlin` included; Groovy changes are not measured.
+A file is matched to its counters by the package it declares and its file name, as its class files record them, not
+by its directory; two files of one name in one package under two source roots share one set of counters.
 
 ## Mutation testing
 
@@ -85,7 +88,7 @@ stacked change, pass the parent branch: `-Pcribro.diffBase=<parent>`.
 | `-Pcribro.diffCoverageEnabled=false` | on | Runs `test` without JaCoCo and skips the report |
 | `-Pcribro.diffCoverageShowAll` | off | Prints the whole coverage report to the console |
 | `-Pcribro.diffCoverageMaxFiles=<n>`, `-Pcribro.diffCoverageMaxLinesPerFile=<n>`, `-Pcribro.diffCoverageMaxLines=<n>` | `10`, `10`, `50` | How much of the coverage report the console shows |
-| `-Pcribro.pitestTargetTests=<globs>` | `*` | Tests allowed to kill a mutant |
+| `-Pcribro.pitestTargetTests=<globs>` | every test (`~.*`) | Tests allowed to kill a mutant |
 | `-Pcribro.pitestMutators=<group>` | `DEFAULTS` | PIT mutator group: `DEFAULTS`, `STRONGER`, or `ALL` |
 | `-Pcribro.pitestThreads=<n>` | half the cores | Mutants analyzed in parallel |
 | `-Pcribro.pitestTimeoutConst=<ms>` | `4000` | Time PIT adds to a test's normal run before it calls a mutant a timeout |
@@ -97,10 +100,11 @@ stacked change, pass the parent branch: `-Pcribro.diffBase=<parent>`.
 
 The tests PIT runs need JDK 11 or later.
 
-Kotlin's compiler emits code the source does not show, such as null checks on parameters, and PIT drops the mutants of
-the cases it knows. The rest surface as live mutants on a changed line whose text gives no hint; Arcmutate's Kotlin
-plugin, free for open source, filters more of them, and `-Pcribro.pitestPlugins` adds it. A mutant in a Kotlin inline
-function called from a changed line is reported under the caller's line.
+A mutant is matched to a changed file as the coverage report matches it, by the package its class declares and the
+file name the class records. Kotlin's compiler emits code the source does not show, such as null checks on parameters,
+and PIT drops the mutants of the cases it knows. The rest are reported as live mutants on a changed line whose text
+gives no hint; Arcmutate's Kotlin plugin (https://docs.arcmutate.com/docs/kotlin.html) filters more of them: `-Pcribro.pitestPlugins` adds
+it, and it needs an Arcmutate licence file, `arcmutate-licence.txt`, at the repository root.
 
 ## Limits
 

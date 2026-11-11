@@ -129,6 +129,18 @@ class CoverageReportTest {
     assertEquals(ICounter.EMPTY, sample.getLine(4).getStatus(), "status of line 4");
   }
 
+  /** JaCoCo names the default package with an empty string; a file in it is keyed by its name. */
+  @Test
+  void aSourceFileInTheDefaultPackageIsKeyedByItsNameAlone() {
+    SourceFileCoverageImpl sample = new SourceFileCoverageImpl("A.java", "");
+    sample.increment(CounterImpl.getInstance(0, 2), CounterImpl.COUNTER_0_0, 3);
+    PackageCoverageImpl packageCoverage = new PackageCoverageImpl("", List.of(), List.of(sample));
+
+    assertEquals(
+        new JacocoLines.Builder().line("A.java", 3, 2, 0, 0).build(),
+        CoverageReport.lines(new BundleCoverageImpl("bundle", List.of(packageCoverage))));
+  }
+
   /** The header names the flags the user passed, which the runs hold, and every module measured. */
   @Test
   void theScopeNamesTheModulesAndTheFiltersTheUserPassed() {

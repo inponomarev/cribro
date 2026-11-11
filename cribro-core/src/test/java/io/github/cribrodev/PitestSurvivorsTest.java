@@ -85,7 +85,7 @@ class PitestSurvivorsTest {
   }
 
   /**
-   * A Kotlin file may lie in a directory that spells no part of its package, so no source root
+   * A Kotlin file may lie in a directory that does not follow its package, so no source root
    * finds it under its key; the changed-lines file names where it is.
    */
   @Test

@@ -15,7 +15,9 @@
  */
 package io.github.cribrodev;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -27,6 +29,8 @@ import java.util.NavigableSet;
 import java.util.TreeSet;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.pitest.util.Glob;
 
 /**
@@ -99,21 +103,36 @@ class ChangedLinesFileTest {
 
   /**
    * Two source roots can each hold a file of one name in one package. The entry names the path
-   * that sorts first, whatever order the files come in.
+   * that sorts first, whichever of the two files comes first.
    */
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void twoFilesUnderOneKeyAreWrittenAsOneEntryWithTheLinesOfBoth(boolean generatedFirst)
+      throws IOException {
+    Path file = directory.resolve("changed-lines.txt");
+    ChangedFile source = new ChangedFile("src/a/B.java", "a/B.java", lines(2));
+    ChangedFile generated = new ChangedFile("gen/a/B.java", "a/B.java", lines(7));
+
+    ChangedLinesFile.write(
+        file, List.of(), generatedFirst ? List.of(generated, source) : List.of(source, generated));
+
+    assertAll(
+        () -> assertEquals(Map.of("a/B.java", lines(2, 7)), ChangedLinesFile.read(file), "lines"),
+        () ->
+            assertEquals(
+                Map.of("a/B.java", "gen/a/B.java"), ChangedLinesFile.readPaths(file), "paths"));
+  }
+
+  /** The entries come ordered by key, so the file reads the same whatever order the files came in. */
   @Test
-  void twoFilesUnderOneKeyAreWrittenAsOneEntryWithTheLinesOfBoth() throws IOException {
+  void theEntriesAreOrderedByKey() throws IOException {
     Path file = directory.resolve("changed-lines.txt");
 
     ChangedLinesFile.write(
-        file,
-        List.of(),
-        List.of(
-            new ChangedFile("src/a/B.java", "a/B.java", lines(2)),
-            new ChangedFile("gen/a/B.java", "a/B.java", lines(7))));
+        file, List.of(), List.of(changed("b/B.java", lines(1)), changed("a/A.java", lines(1))));
 
-    assertEquals(Map.of("a/B.java", lines(2, 7)), ChangedLinesFile.read(file));
-    assertEquals(Map.of("a/B.java", "gen/a/B.java"), ChangedLinesFile.readPaths(file));
+    assertEquals(
+        List.of("a/A.java", "b/B.java"), List.copyOf(ChangedLinesFile.read(file).keySet()));
   }
 
   @Test
@@ -187,13 +206,13 @@ class ChangedLinesFileTest {
     assertEquals(Map.of("a/B.java", lines(3, 4, 5, 9)), ChangedLinesFile.read(file));
   }
 
-  /** An entry of an earlier format, with no path, still reads to its lines and names no path. */
+  /** The file is written and read by one cribro, so an entry short of a field is corruption. */
   @Test
-  void anEntryWithoutAPathReadsToItsLinesAlone() throws IOException {
+  void anEntryWithoutAPathIsRefused() throws IOException {
     Path file = directory.resolve("changed-lines.txt");
     Files.writeString(file, "a/B.java\t3\n");
 
-    assertEquals(Map.of("a/B.java", lines(3)), ChangedLinesFile.read(file));
-    assertEquals(Map.of(), ChangedLinesFile.readPaths(file));
+    IOException refused = assertThrows(IOException.class, () -> ChangedLinesFile.read(file));
+    assertEquals(true, refused.getMessage().endsWith("line: a/B.java\t3"), refused.getMessage());
   }
 }

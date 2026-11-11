@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NavigableSet;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
 
@@ -59,9 +60,11 @@ public final class ChangedLinesFile {
   /**
    * Writes the changed lines to a file, replacing whatever it held.
    *
-   * <p>Two files under one key, which happens where two source roots hold a file of one name in one
-   * package, are written as one entry with the lines of both, under the path that sorts first, so
-   * that the file reads the same whatever order the files come in.
+   * <p>The entries are ordered by key, and two files under one key, which happens where two source
+   * roots hold a file of one name in one package, are written as one entry with the lines of both,
+   * under the path that sorts first; so the file reads the same whatever order the files come in.
+   * The entry names one file for the lines of both, so a reader quotes every line of the entry
+   * from that file.
    *
    * @param header comment lines written before the entries, without the leading {@code #}
    * @param files the changed files; a file with no changed line is left out
@@ -72,8 +75,8 @@ public final class ChangedLinesFile {
     for (String comment : header) {
       text.append("# ").append(comment).append('\n');
     }
-    Map<String, String> paths = new LinkedHashMap<>();
-    Map<String, NavigableSet<Integer>> lines = new LinkedHashMap<>();
+    Map<String, String> paths = new TreeMap<>();
+    Map<String, NavigableSet<Integer>> lines = new TreeMap<>();
     for (ChangedFile changed : files) {
       // A file with no changed line has no entry, so every entry the reader parses names a line.
       if (changed.lines().isEmpty()) {
@@ -125,29 +128,29 @@ public final class ChangedLinesFile {
 
   /**
    * Returns the repository-relative path of each file the file holds, keyed by {@link
-   * SourceFileKey}; an entry written without a path is left out.
+   * SourceFileKey}.
    */
   public static Map<String, String> readPaths(Path file) throws IOException {
     Map<String, String> paths = new LinkedHashMap<>();
     for (String line : entries(file)) {
-      int first = line.indexOf('\t');
-      int last = line.lastIndexOf('\t');
-      if (first < last) {
-        paths.put(key(line), line.substring(first + 1, last));
-      }
+      paths.put(key(line), line.substring(line.indexOf('\t') + 1, line.lastIndexOf('\t')));
     }
     return paths;
   }
 
-  /** Returns the lines of the file that hold an entry, after checking that each has its tab. */
+  /**
+   * Returns the lines of the file that hold an entry, after checking that each has its three
+   * fields. The file is written and read by one cribro, so a shorter entry is corruption, not an
+   * older form.
+   */
   private static List<String> entries(Path file) throws IOException {
     List<String> entries = new ArrayList<>();
     for (String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
       if (line.isEmpty() || line.startsWith("#")) {
         continue;
       }
-      if (line.indexOf('\t') < 0) {
-        throw new IOException("No tab in " + file + " line: " + line);
+      if (line.indexOf('\t') == line.lastIndexOf('\t')) {
+        throw new IOException("Not key, path, and lines in " + file + " line: " + line);
       }
       entries.add(line);
     }

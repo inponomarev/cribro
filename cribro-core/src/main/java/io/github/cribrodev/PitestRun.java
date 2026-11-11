@@ -54,11 +54,12 @@ public final class PitestRun {
   /**
    * The {@code targetTests} filter that lets every test kill a mutant, where the caller names none.
    *
-   * <p>It is a regular expression rather than the glob {@code *} because on Windows the Java
-   * launcher expands an argument that is a bare wildcard into the names of the files in the
-   * working directory, so PIT would be told to run a test class named {@code .git}. The launcher
-   * leaves {@code ~.*} alone unless a file in that directory starts with {@code ~.}. PIT escapes a
-   * {@code +} in a pattern, so {@code .+} would match nothing.
+   * <p>PIT reads a filter that starts with {@code ~} as a regular expression of the rest, so this
+   * is the expression {@code .*}. It is not the glob {@code *} because on Windows the Java launcher
+   * expands an argument that is a bare wildcard into the names of the files in the working
+   * directory, so PIT would be told to run a test class named {@code .git}. The launcher leaves
+   * {@code ~.*} alone unless a file in that directory starts with {@code ~.}. PIT escapes a {@code
+   * +} in either form of filter, so {@code ~.+} would match nothing.
    */
   public static final String ALL_TESTS = "~.*";
 
@@ -223,6 +224,24 @@ public final class PitestRun {
   }
 
   /**
+   * Returns the dependency coordinates of the further PIT plugins a {@code cribro.pitestPlugins}
+   * property names, which both build tools put on PIT's classpath: comma-separated, each trimmed,
+   * blanks left out. Null, the property unset, names none.
+   */
+  public static List<String> plugins(String property) {
+    List<String> coordinates = new ArrayList<>();
+    if (property == null) {
+      return coordinates;
+    }
+    for (String coordinate : property.split(",")) {
+      if (!coordinate.isBlank()) {
+        coordinates.add(coordinate.trim());
+      }
+    }
+    return coordinates;
+  }
+
+  /**
    * Returns the line naming the JVM arguments PIT ran the tests without, or null where there are
    * none.
    *
@@ -263,7 +282,7 @@ public final class PitestRun {
    *     whose entries name the path of each changed file
    * @param targetTests the glob the run was given, or null
    * @param sourceDirs absolute source directories, searched in order for a mutated file the
-   *     changed-lines file does not name
+   *     changed-lines file does not name or names at a path that no longer exists
    */
   public static String report(
       File changedLines,

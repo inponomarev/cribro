@@ -240,14 +240,14 @@ final class DiffCoverageReport {
    * source file and gives no way to tell them apart. Each path is still printed, so that neither
    * changed file leaves the report.
    *
+   * @param changed the files in the order the lists that name nothing to do print them, which
+   *     {@link ChangedLines#underSourceRoots} orders by path
    * @param sources the working tree the uncovered lines are quoted from
    */
   static DiffCoverageReport measure(
       List<ChangedFile> changed, JacocoLines lines, SourceLines sources) {
     DiffCoverageReport report = new DiffCoverageReport();
-    List<ChangedFile> ordered = new ArrayList<>(changed);
-    ordered.sort(Comparator.comparing(ChangedFile::path));
-    for (ChangedFile entry : ordered) {
+    for (ChangedFile entry : changed) {
       String path = entry.path();
       String key = entry.key();
       if (!lines.covers(key)) {

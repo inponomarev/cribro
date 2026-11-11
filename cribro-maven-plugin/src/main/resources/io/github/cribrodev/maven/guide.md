@@ -45,11 +45,14 @@ tests may never have set up.
 After a run of the whole suite, old tests execute most of that code under the old conditions, so the block ends with
 the `-Dtest` arguments that run only the test methods the change added or edited under the module's own `src`
 directory. Run those: what is left uncovered then is what the change's own tests do not exercise in the code it
-reaches. Write a test for a gap that the change made reachable, or say why it cannot happen.
+reaches. Write a test for a gap that the change made reachable, or say why it cannot happen. The block is built from
+the changed `.java` files only; a change to a `.kt` file adds no method and no `-Dtest` argument to it.
 
 The report measures the tests of surefire's `default-test` execution. Only `.java` and `.kt` files under the main
-source directories count, the `sourceDirs` of `kotlin-maven-plugin` included; Groovy changes are not measured. A build
-that skips the tests prints no report.
+source directories count, the `sourceDirs` of `kotlin-maven-plugin` included; Groovy changes are not measured. A file
+is matched to its counters by the package it declares and its file name, as its class files record them, not by its
+directory; two files of one name in one package under two source roots share one set of counters. A build that skips
+the tests prints no report.
 
 ## Mutation testing
 
@@ -111,10 +114,11 @@ Pass a property with `-D`, or set it in `.mvn/maven.config` or in the `<properti
 
 The tests PIT runs need JDK 11 or later.
 
-Kotlin's compiler emits code the source does not show, such as null checks on parameters, and PIT drops the mutants of
-the cases it knows. The rest surface as live mutants on a changed line whose text gives no hint; Arcmutate's Kotlin
-plugin, free for open source, filters more of them, and `-Dcribro.pitestPlugins` adds it. A mutant in a Kotlin inline
-function called from a changed line is reported under the caller's line.
+A mutant is matched to a changed file as the coverage report matches it, by the package its class declares and the
+file name the class records. Kotlin's compiler emits code the source does not show, such as null checks on parameters,
+and PIT drops the mutants of the cases it knows. The rest are reported as live mutants on a changed line whose text
+gives no hint; Arcmutate's Kotlin plugin (https://docs.arcmutate.com/docs/kotlin.html) filters more of them: `-Dcribro.pitestPlugins` adds
+it, and it needs an Arcmutate licence file, `arcmutate-licence.txt`, at the repository root.
 
 ## Limits
 

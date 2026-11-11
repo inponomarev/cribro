@@ -47,7 +47,7 @@ class KotlinBuildTest {
   /**
    * Writes a one-file Kotlin build whose only test covers one branch of {@code max} and never calls
    * {@code next}. The file lies at the root of {@code src/main/kotlin} and declares a package, so
-   * its directory spells no part of it.
+   * its directory does not follow it.
    */
   private void writeBuild() throws IOException {
     Files.writeString(

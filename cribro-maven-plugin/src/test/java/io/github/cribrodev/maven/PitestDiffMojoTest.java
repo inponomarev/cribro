@@ -46,7 +46,11 @@ import org.apache.maven.artifact.Artifact;
 import org.apache.maven.artifact.DefaultArtifact;
 import org.apache.maven.artifact.handler.DefaultArtifactHandler;
 import org.apache.maven.execution.MavenExecutionRequest;
+import org.apache.maven.model.Build;
+import org.apache.maven.model.Plugin;
+import org.apache.maven.model.PluginExecution;
 import org.apache.maven.project.MavenProject;
+import org.codehaus.plexus.util.xml.Xpp3DomBuilder;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -761,6 +765,38 @@ class PitestDiffMojoTest {
         List.of("dependent", "untested"),
         PitestDiffMojo.mutatedProjects(dependent, List.of(untested, tested, fixtures, dependent))
             .stream()
+            .map(MavenProject::getArtifactId)
+            .collect(Collectors.toList()));
+  }
+
+  /** A module with Kotlin-only tests under kotlin-maven-plugin's test-compile sourceDir has tests. */
+  @Test
+  void aReactorDependencyWithKotlinOnlyTestsIsNotMutatedByItsDependent() throws Exception {
+    MavenProject tested = module("tested");
+    Path test = testClasses.resolve("tested/src/test/kotlin/TestedTest.kt");
+    Files.createDirectories(test.getParent());
+    Files.createFile(test);
+    tested.getModel().setBuild(new Build());
+    Plugin kotlin = new Plugin();
+    kotlin.setGroupId("org.jetbrains.kotlin");
+    kotlin.setArtifactId("kotlin-maven-plugin");
+    PluginExecution execution = new PluginExecution();
+    execution.setId("test-compile");
+    execution.setGoals(List.of("test-compile"));
+    execution.setConfiguration(
+        Xpp3DomBuilder.build(
+            new java.io.StringReader(
+                "<configuration><sourceDirs><sourceDir>"
+                    + test.getParent()
+                    + "</sourceDir></sourceDirs></configuration>")));
+    kotlin.addExecution(execution);
+    tested.getBuild().addPlugin(kotlin);
+    MavenProject dependent = module("dependent");
+    dependent.setArtifacts(new LinkedHashSet<>(List.of(demoArtifact("tested", null))));
+
+    assertEquals(
+        List.of("dependent"),
+        PitestDiffMojo.mutatedProjects(dependent, List.of(tested, dependent)).stream()
             .map(MavenProject::getArtifactId)
             .collect(Collectors.toList()));
   }

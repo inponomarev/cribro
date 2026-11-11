@@ -112,7 +112,7 @@ class ExposedCodeReportTest {
     ExposedCode exposed = ExposedCode.find(directory.toFile(), changed, List.of(ROOT));
     return ExposedCodeReport.measure(
             exposed,
-            List.of(ROOT),
+            Map.of(SAMPLE, "p/Sample.java"),
             JacocoLines.read(List.of(xml.toFile())),
             SourceLines.under(directory.toFile()))
         .render(

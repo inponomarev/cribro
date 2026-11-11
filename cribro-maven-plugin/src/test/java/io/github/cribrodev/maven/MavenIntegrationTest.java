@@ -162,7 +162,7 @@ class MavenIntegrationTest {
 
   /**
    * A Kotlin module keeps its sources where kotlin-maven-plugin's {@code sourceDirs} say, and a
-   * Kotlin file may declare a package its directory spells no part of; the changed file here lies
+   * Kotlin file may declare a package its directory does not follow; the changed file here lies
    * at the root of {@code src/main/kotlin}. Its one test covers one branch of {@code max} and never
    * calls {@code next}.
    */

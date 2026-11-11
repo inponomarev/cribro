@@ -55,7 +55,7 @@ class ChangedLinesTest {
         underSourceRoots("m/src/main/java/com/x/A.java", "m/src/main/java"));
   }
 
-  /** Kotlin lets a file declare a package its directory spells no part of. */
+  /** Kotlin lets a file declare a package its directory does not follow. */
   @Test
   void aKotlinFileIsKeyedByItsDeclaredPackageWhateverItsDirectory() throws IOException {
     write("m/src/main/kotlin/Calc.kt", "package demo.math\n\nfun max(a: Int, b: Int) = a\n");

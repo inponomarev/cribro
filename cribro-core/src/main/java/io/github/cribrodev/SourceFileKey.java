@@ -25,14 +25,19 @@ import java.util.stream.Collectors;
 
 /**
  * The key JaCoCo and PIT record a source file by: the package of its classes as a path, then the
- * file name, as in {@code com/example/Sample.kt}.
+ * file name, as in {@code com/example/Sample.kt}. A file in the default package is keyed by its
+ * name alone, {@code Sample.kt}, as JaCoCo names that package with an empty string.
  *
  * <p>A class file records its package and, in its {@code SourceFile} attribute, the name of the
  * file it was compiled from, but not the directory the file lay in. So a tool that sees only
- * bytecode knows a file by this key alone. For Java the directory below the source root spells the
- * package by convention; Kotlin lets a file declare any package wherever it lies, and Kotlin
+ * bytecode knows a file by this key alone. For Java the directory below the source root follows
+ * the package by convention; Kotlin lets a file declare any package wherever it lies, and Kotlin
  * projects often drop the leading directories. The key is therefore read from the {@code package}
- * declaration in the file, and the directory stands in only where the file cannot be read.
+ * declaration in the file, and the path below the source root stands in where the file cannot be
+ * read or holds no readable declaration, as {@link #declaredPackage(String, boolean)} defines one.
+ *
+ * <p>Every reader of a JaCoCo report or a PIT mutant builds the key through {@link #of(String,
+ * String)}, so the rule has one home.
  */
 public final class SourceFileKey {
 
@@ -47,8 +52,19 @@ public final class SourceFileKey {
   }
 
   /** Returns whether the path names a source file cribro measures, by its extension. */
-  static boolean isSource(String path) {
+  public static boolean isSource(String path) {
     return EXTENSIONS.stream().anyMatch(path::endsWith);
+  }
+
+  /**
+   * Returns the key of a file in a package, as a JaCoCo report or a PIT mutant names them.
+   *
+   * @param packagePath the package with {@code /} between its segments, as JaCoCo and a class
+   *     file's internal name spell it; empty or null for the default package
+   * @param fileName the name of the file, as the {@code SourceFile} attribute records it
+   */
+  public static String of(String packagePath, String fileName) {
+    return packagePath == null || packagePath.isEmpty() ? fileName : packagePath + "/" + fileName;
   }
 
   /**
@@ -57,7 +73,7 @@ public final class SourceFileKey {
    * @param repository the repository root
    * @param path the file, relative to the repository and spelled with {@code /} as git prints it
    * @param relativeToRoot the path below the source root that holds the file, which is the key
-   *     where the file cannot be read
+   *     where the file cannot be read or holds no readable package declaration
    */
   static String of(File repository, String path, String relativeToRoot) {
     String declared;
@@ -66,40 +82,53 @@ public final class SourceFileKey {
       declared =
           declaredPackage(
               new String(
-                  Files.readAllBytes(repository.toPath().resolve(path)), StandardCharsets.UTF_8));
+                  Files.readAllBytes(repository.toPath().resolve(path)), StandardCharsets.UTF_8),
+              path.endsWith(".kt"));
     } catch (IOException | InvalidPathException e) {
       return relativeToRoot;
     }
     if (declared == null) {
       return relativeToRoot;
     }
-    String name = path.substring(path.lastIndexOf('/') + 1);
-    return declared.isEmpty() ? name : declared.replace('.', '/') + "/" + name;
+    return of(declared.replace('.', '/'), path.substring(path.lastIndexOf('/') + 1));
+  }
+
+  /** Returns {@link #declaredPackage(String, boolean)} for a Java source. */
+  static String declaredPackage(String text) {
+    return declaredPackage(text, false);
   }
 
   /**
    * Returns the package a Java or Kotlin source declares, an empty string where it declares none,
-   * or null where the text has no readable declaration, as with an unterminated comment.
+   * or null where the text has no readable declaration, as with an unterminated comment, {@code
+   * package ;}, or a {@code package} keyword that ends the text.
    *
-   * <p>Only comments and, for Kotlin, file annotations may precede the declaration, so the text is
-   * scanned rather than searched: a string literal or a comment further down that spells {@code
-   * package} names no package.
+   * <p>Only comments and annotations, Java package annotations and Kotlin file annotations alike,
+   * may precede the declaration, so the text is scanned rather than searched: a string literal or a
+   * comment further down that spells {@code package} names no package.
+   *
+   * @param kotlin whether the text is Kotlin, whose block comments nest, so that a comment holding
+   *     another ends at the matching close rather than the first
    */
-  static String declaredPackage(String text) {
+  static String declaredPackage(String text, boolean kotlin) {
     int at = text.startsWith("﻿") ? 1 : 0;
-    at = skipPreamble(text, at);
+    at = skipSpaceCommentsAndAnnotations(text, at, kotlin);
     if (at < 0) {
       return null;
     }
-    if (!text.startsWith("package", at)
-        || at + "package".length() >= text.length()
-        || !Character.isWhitespace(text.charAt(at + "package".length()))) {
+    if (!text.startsWith("package", at)) {
       return "";
     }
     at += "package".length();
+    if (at >= text.length()) {
+      return null;
+    }
+    if (!Character.isWhitespace(text.charAt(at))) {
+      return "";
+    }
     StringBuilder name = new StringBuilder();
     while (true) {
-      at = skipPreamble(text, at);
+      at = skipSpaceCommentsAndAnnotations(text, at, kotlin);
       if (at < 0 || at >= text.length()) {
         return null;
       }
@@ -120,7 +149,7 @@ public final class SourceFileKey {
         }
         name.append(text, start, at);
       }
-      at = skipPreamble(text, at);
+      at = skipSpaceCommentsAndAnnotations(text, at, kotlin);
       if (at >= 0 && at < text.length() && text.charAt(at) == '.') {
         name.append('.');
         at++;
@@ -133,8 +162,11 @@ public final class SourceFileKey {
   /**
    * Returns the index of the first character after the whitespace, comments, and annotations at
    * {@code at}, or -1 where one of them never ends.
+   *
+   * @param nestedComments whether a block comment may hold another, as in Kotlin
    */
-  private static int skipPreamble(String text, int at) {
+  private static int skipSpaceCommentsAndAnnotations(
+      String text, int at, boolean nestedComments) {
     while (at >= 0 && at < text.length()) {
       char c = text.charAt(at);
       if (Character.isWhitespace(c)) {
@@ -143,8 +175,7 @@ public final class SourceFileKey {
         int end = text.indexOf('\n', at);
         at = end < 0 ? text.length() : end + 1;
       } else if (text.startsWith("/*", at)) {
-        int end = text.indexOf("*/", at + 2);
-        at = end < 0 ? -1 : end + 2;
+        at = skipBlockComment(text, at, nestedComments);
       } else if (c == '@') {
         at = skipAnnotation(text, at + 1);
       } else {
@@ -152,6 +183,30 @@ public final class SourceFileKey {
       }
     }
     return at;
+  }
+
+  /**
+   * Returns the index after the block comment that opens at {@code at}, or -1 where it never
+   * closes. With nesting, each comment opened inside it needs a close of its own.
+   */
+  private static int skipBlockComment(String text, int at, boolean nested) {
+    int depth = 1;
+    at += 2;
+    while (at < text.length()) {
+      if (text.startsWith("*/", at)) {
+        depth--;
+        at += 2;
+        if (depth == 0) {
+          return at;
+        }
+      } else if (nested && text.startsWith("/*", at)) {
+        depth++;
+        at += 2;
+      } else {
+        at++;
+      }
+    }
+    return -1;
   }
 
   /**

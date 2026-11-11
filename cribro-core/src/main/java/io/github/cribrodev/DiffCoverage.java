@@ -220,7 +220,10 @@ public final class DiffCoverage {
     DiffCoverageReport report = DiffCoverageReport.measure(files, lines, sources);
     ExposedCodeReport exposed =
         ExposedCodeReport.measure(
-            ExposedCode.find(repository, changed, sourceRoots), sourceRoots, lines, sources);
+            ExposedCode.find(repository, changed, sourceRoots),
+            files.stream().collect(Collectors.toMap(ChangedFile::path, ChangedFile::key)),
+            lines,
+            sources);
     Function<List<ExposedCode.TestMethod>, String> tests =
         methods ->
             testFilter.apply(

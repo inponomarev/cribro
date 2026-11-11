@@ -6,7 +6,9 @@ description: Measure how well the tests of a Gradle or Maven Java or Kotlin proj
 # Diff coverage and diff mutation testing
 
 cribro adds diff coverage to `test` and diff mutation testing to every Java or Kotlin project of a Gradle or Maven build. A build
-with a `pom.xml` follows the [Maven](#maven) section; the rest of this section is for Gradle builds.
+with a `pom.xml` follows the [Maven](#maven) section; the rest of this section is for Gradle builds. A changed file is
+matched to its coverage counters and its mutants by the package it declares and its file name, not by its directory, so
+a Kotlin file whose directory does not follow its package is measured all the same.
 
 In a Gradle build, cribro adds a `pitestDiff` task. A build can apply it itself: its `settings.gradle` or
 `settings.gradle.kts` names `io.github.cribro-dev.cribro`. Otherwise the init script at

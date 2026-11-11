@@ -63,8 +63,9 @@ class PitestRunTest {
 
   /**
    * On Windows the Java launcher expands a bare {@code *} argument into the file names of the
-   * working directory, so a run with no test glob names every test with a pattern that holds no
-   * wildcard character the launcher could match a file against.
+   * working directory, so a run with no test glob names every test with a pattern that is not a
+   * bare wildcard, which the launcher leaves alone unless a file named {@code ~.<something>} lies
+   * in the working directory.
    */
   @Test
   void aRunWithNoTestGlobNamesEveryTestWithoutABareWildcard() throws IOException {
@@ -75,6 +76,16 @@ class PitestRunTest {
         true,
         Pattern.compile(targetTests.substring(1)).matcher("demo.CalcTest").matches(),
         "matches a test class: " + targetTests);
+  }
+
+  @Test
+  void anUnsetPluginsPropertyNamesNoPlugin() {
+    assertEquals(List.of(), PitestRun.plugins(null));
+  }
+
+  @Test
+  void thePluginsPropertyIsSplitAtCommasTrimmedAndStrippedOfBlanks() {
+    assertEquals(List.of("a:b:1", "c:d:2"), PitestRun.plugins(" a:b:1 , ,c:d:2 "));
   }
 
   /** The file keeps a long classpath off a command line that Windows limits to 32767 characters. */

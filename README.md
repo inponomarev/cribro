@@ -38,11 +38,13 @@ A Maven build has its own list, in [Requirements for Maven](#requirements-for-ma
 either build tool, you need a JDK 25 where Gradle finds it, for example as `JAVA_HOME`. The build does not download one.
 
 A changed file is matched to its JaCoCo counters and its PIT mutants by the package it declares and its name, which is
-what its class files record, so a Kotlin file whose directory spells no part of its package is still measured. PIT
-drops the mutants of the Kotlin compiler-generated code it knows about, such as null checks on parameters; the rest
-surface as live mutants on a changed line whose text gives no hint. Arcmutate's Kotlin plugin, free for open source,
-filters more of them, and `-Pcribro.pitestPlugins=com.arcmutate:pitest-kotlin-plugin:<version>` puts it on PIT's
-classpath.
+what its class files record, so a Kotlin file whose directory does not follow its package is still measured. The block
+on unchanged code the change routes new inputs to is built from the changed `.java` files only; a change to a `.kt`
+file adds nothing to it. PIT drops the mutants of the Kotlin compiler-generated code it knows about, such as null
+checks on parameters; the rest are reported as live mutants on a changed line whose text gives no hint. Arcmutate's
+[Kotlin plugin](https://docs.arcmutate.com/docs/kotlin.html) filters more of them: `-Pcribro.pitestPlugins=com.arcmutate:pitest-kotlin-plugin:<version>`
+in Gradle, or `-Dcribro.pitestPlugins=...` in Maven, puts it on PIT's classpath, and it needs an Arcmutate licence
+file, `arcmutate-licence.txt`, at the repository root; its page gives the terms.
 
 Tried on pgjdbc (Gradle 9.4.1 and 9.7.1, JUnit Jupiter), NullAway (Gradle 9.8.1, JUnit 4), and a one-class build on
 Gradle 8.14.3 whose tests have no `junit-platform-launcher` dependency. CI runs `test pitestDiff` through the init
@@ -81,7 +83,7 @@ this change out of a repository that others build.
    ```
 
 2. Return to the project's root directory, and add the plugin to its `settings.gradle.kts`. It adds the tasks to
-   every Java project of the build:
+   every project of the build that applies the `java` plugin, which the Kotlin JVM plugin applies too:
 
    ```kotlin
    pluginManagement {
@@ -102,7 +104,7 @@ this change out of a repository that others build.
    `id 'io.github.cribro-dev.cribro' version '1.0.0-SNAPSHOT'`.
 
 3. Check that the build applies it, from the project's root directory. The command prints `cribro 1.0.0-SNAPSHOT`
-   and the Java projects that have the tasks:
+   and the projects that have the tasks:
 
    ```bash
    ./gradlew -q cribro
@@ -154,7 +156,7 @@ in a command that names it with `--init-script`.
    ```
 
 4. Check it from the root directory of the project you want to measure. The command prints
-   `cribro 1.0.0-SNAPSHOT` and the Java projects that have the tasks:
+   `cribro 1.0.0-SNAPSHOT` and the projects that have the tasks:
 
    ```bash
    ./gradlew --init-script ~/.gradle/cribro/cribro.init.gradle -q cribro
@@ -217,10 +219,10 @@ An agent learns about cribro from the `AGENTS.md` note of a build that applies i
 ## What the plugin does to a build
 
 The plugin registers `cribro` on the root project, and adds a `cribroProjectElements` configuration to every project;
-`cribro` resolves that configuration of each project to list the Java projects. Applied as a settings plugin or through
-the init script, cribro works with Isolated Projects, tried on Gradle 9.8.2. On Gradle 8, Isolated Projects fails the
-`cribro` task where a subproject has the same group and name as the root project. For every project with the `java`
-plugin, it:
+`cribro` resolves that configuration of each project to list the projects that have the tasks. Applied as a settings
+plugin or through the init script, cribro works with Isolated Projects, tried on Gradle 9.8.2. On Gradle 8, Isolated
+Projects fails the `cribro` task where a subproject has the same group and name as the root project. For every project
+with the `java` plugin, it:
 
 - applies `jacoco`, enables it on the `test` task, and has `test` finalized by `jacocoTestReport` with the XML report,
   then by `diffCoverage`. These override the build's own settings after its scripts run, so a build that disables

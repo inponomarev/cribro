@@ -22,6 +22,7 @@ import io.github.cribrodev.Git;
 import io.github.cribrodev.CribroException;
 import io.github.cribrodev.PitestJvmArgs;
 import io.github.cribrodev.PitestRun;
+import io.github.cribrodev.SourceFileKey;
 import io.github.cribrodev.Versions;
 import java.io.File;
 import java.io.IOException;
@@ -42,6 +43,7 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -230,6 +232,9 @@ public class PitestDiffMojo extends AbstractMojo {
     List<File> sourceDirs = new ArrayList<>();
     List<File> classDirs = new ArrayList<>();
     for (MavenProject module : mutated) {
+      for (String unresolved : SourceRoots.unresolvedKotlinSourceDirs(module, "compile")) {
+        getLog().warn(unresolvedSourceDirMessage(module, unresolved));
+      }
       List<String> roots = SourceRoots.of(repository, module);
       for (String root : roots) {
         sourceDirs.add(new File(repository, root));
@@ -255,7 +260,7 @@ public class PitestDiffMojo extends AbstractMojo {
               "Skipped: no test class of "
                   + project.getArtifactId()
                   + " is among the tests PIT runs: "
-                  + (tests != null ? tests : "*")
+                  + (tests != null ? tests : PitestRun.ALL_TESTS)
                   + (excluded != null ? ", except " + excluded : "")
                   + ".");
       return;
@@ -641,11 +646,21 @@ public class PitestDiffMojo extends AbstractMojo {
     return Pattern.compile(regex.toString());
   }
 
+  /**
+   * Returns the line that says a {@code kotlin-maven-plugin} source directory of the module is not
+   * measured, because its expression is one Maven did not interpolate.
+   */
+  static String unresolvedSourceDirMessage(MavenProject module, String sourceDir) {
+    return "kotlin-maven-plugin sourceDir "
+        + sourceDir
+        + " of "
+        + module.getArtifactId()
+        + " holds an expression Maven did not resolve, so the changes under it are not measured.";
+  }
+
   private static boolean hasTestSources(MavenProject module) {
-    List<String> roots = new ArrayList<>(module.getTestCompileSourceRoots());
-    roots.addAll(SourceRoots.kotlinSourceDirs(module, "test-compile"));
-    for (String root : roots) {
-      if (hasFiles(new File(root).toPath(), ".java") || hasFiles(new File(root).toPath(), ".kt")) {
+    for (String root : SourceRoots.testSourceDirs(module)) {
+      if (hasFiles(new File(root).toPath(), path -> SourceFileKey.isSource(path.toString()))) {
         return true;
       }
     }
@@ -653,15 +668,16 @@ public class PitestDiffMojo extends AbstractMojo {
   }
 
   private static boolean hasClasses(File directory) {
-    return hasFiles(directory.toPath(), ".class");
+    return hasFiles(directory.toPath(), path -> path.toString().endsWith(".class"));
   }
 
-  private static boolean hasFiles(Path directory, String suffix) {
+  /** Returns whether the directory holds a wanted file, in one walk that stops at the first. */
+  private static boolean hasFiles(Path directory, Predicate<Path> wanted) {
     if (!Files.isDirectory(directory)) {
       return false;
     }
     try (Stream<Path> walk = Files.walk(directory)) {
-      return walk.anyMatch(path -> path.toString().endsWith(suffix));
+      return walk.anyMatch(wanted);
     } catch (IOException e) {
       return false;
     }
@@ -793,13 +809,7 @@ public class PitestDiffMojo extends AbstractMojo {
                   ? pitestJunit5PluginVersion
                   : Versions.pitestJunit5Plugin()));
     }
-    if (pitestPlugins != null) {
-      for (String plugin : pitestPlugins.split(",")) {
-        if (!plugin.isBlank()) {
-          coordinates.add(plugin.trim());
-        }
-      }
-    }
+    coordinates.addAll(PitestRun.plugins(pitestPlugins));
     List<File> files = resolve(coordinates);
     files.add(
         new File(ChangedLinesFile.class.getProtectionDomain().getCodeSource().getLocation().toURI()));

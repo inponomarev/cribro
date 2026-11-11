@@ -20,6 +20,7 @@ import io.github.cribrodev.CribroException;
 import io.github.cribrodev.DiffCoverage;
 import io.github.cribrodev.Git;
 import io.github.cribrodev.JacocoLines;
+import io.github.cribrodev.SourceFileKey;
 import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -133,6 +134,9 @@ final class CoverageReport {
     String scope = scope(measured);
     boolean filtered = measured.stream().anyMatch(run -> run.filtered);
     for (MavenProject project : projects) {
+      for (String unresolved : SourceRoots.unresolvedKotlinSourceDirs(project, "compile")) {
+        notes.add("Diff coverage: " + PitestDiffMojo.unresolvedSourceDirMessage(project, unresolved));
+      }
       List<String> sourceRoots = SourceRoots.of(git.repositoryRoot(), project);
       if (!DiffCoverage.reaches(sourceRoots, diff)) {
         continue;
@@ -339,11 +343,7 @@ final class CoverageReport {
     JacocoLines.Builder lines = new JacocoLines.Builder();
     for (IPackageCoverage packageCoverage : bundle.getPackages()) {
       for (ISourceFileCoverage sourceFile : packageCoverage.getSourceFiles()) {
-        // The default package is named "", and a file in it is keyed by its name alone.
-        String key =
-            packageCoverage.getName().isEmpty()
-                ? sourceFile.getName()
-                : packageCoverage.getName() + "/" + sourceFile.getName();
+        String key = SourceFileKey.of(packageCoverage.getName(), sourceFile.getName());
         lines.sourceFile(key);
         for (int number = sourceFile.getFirstLine(); number <= sourceFile.getLastLine(); number++) {
           ILine line = sourceFile.getLine(number);

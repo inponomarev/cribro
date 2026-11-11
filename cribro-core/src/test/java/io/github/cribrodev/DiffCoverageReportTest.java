@@ -31,6 +31,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableSet;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -99,10 +100,12 @@ class DiffCoverageReportTest {
    */
   private DiffCoverageReport measure(
       Map<String, NavigableSet<Integer>> changed, List<String> sourceRoots, JacocoLines lines) {
-    // The sources written here are snippets without a package declaration, so each file is keyed
-    // by its path below the root, as a file whose declaration cannot be read is.
+    // The sources written here are snippets rather than real sources, so each file is keyed by
+    // its path below the root directly, without SourceFileKey: the report under test needs only
+    // a key the JaCoCo lines share. The files come ordered by path, as the production caller
+    // passes them.
     List<ChangedFile> files = new ArrayList<>();
-    for (Map.Entry<String, NavigableSet<Integer>> entry : changed.entrySet()) {
+    for (Map.Entry<String, NavigableSet<Integer>> entry : new TreeMap<>(changed).entrySet()) {
       String key = ChangedLines.underSourceRoot(entry.getKey(), sourceRoots);
       if (key != null) {
         files.add(new ChangedFile(entry.getKey(), key, entry.getValue()));
@@ -187,6 +190,30 @@ class DiffCoverageReportTest {
 
   @Nested
   class SplittingTheChangedLines {
+
+    /**
+     * Two source roots can each hold a file of one name in one package, which JaCoCo records
+     * under one key; each file is measured against those counters at its own changed lines, and
+     * neither leaves the report.
+     */
+    @Test
+    void twoFilesUnderOneKeyAreEachReportedAgainstTheSameCounters() throws IOException {
+      String generated = "nullaway/gen/com/uber/nullaway/Sample.java";
+      Map<String, NavigableSet<Integer>> changed = changed(SAMPLE, 10);
+      changed.put(generated, new TreeSet<>(List.of(11)));
+
+      DiffCoverageReport result =
+          measure(changed, List.of(ROOT, "nullaway/gen"), report(line(10, 4, 0, 0) + line(11, 0, 0, 0)));
+
+      assertAll(
+          () -> assertEquals(List.of(generated, SAMPLE), result.measuredPaths(), "paths"),
+          () ->
+              assertEquals(
+                  List.of(0, 1),
+                  result.measured.stream().map(file -> file.executedLines).toList(),
+                  "executed lines per file"),
+          () -> assertEquals(2, result.executableLines(), "executableLines"));
+    }
 
     @Test
     void anExecutedLineCountsTowardsBothTheExecutedAndTheExecutableTotal() throws IOException {

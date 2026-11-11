@@ -19,6 +19,7 @@ import io.github.cribrodev.DiffCoverageReport.AffectedLine;
 import io.github.cribrodev.DiffCoverageReport.Limits;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.NavigableSet;
 import java.util.function.Function;
 
@@ -58,12 +59,15 @@ final class ExposedCodeReport {
   /**
    * Measures the exposed lines against the run's counters; a method with no line that emits
    * bytecode is left out.
+   *
+   * @param keys the {@link SourceFileKey} of each changed file by its path, the key the coverage
+   *     block looks the same counters up by
    */
   static ExposedCodeReport measure(
-      ExposedCode exposed, List<String> sourceRoots, JacocoLines lines, SourceLines sources) {
+      ExposedCode exposed, Map<String, String> keys, JacocoLines lines, SourceLines sources) {
     ExposedCodeReport report = new ExposedCodeReport(exposed);
     for (ExposedCode.Region region : exposed.regions) {
-      String key = ChangedLines.underSourceRoot(region.path, sourceRoots);
+      String key = keys.get(region.path);
       if (key == null || !lines.covers(key)) {
         continue;
       }

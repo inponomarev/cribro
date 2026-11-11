@@ -19,6 +19,7 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.NavigableSet;
 import java.util.stream.Collectors;
+import io.github.cribrodev.SourceFileKey;
 import org.pitest.bytecode.analysis.ClassTree;
 import org.pitest.mutationtest.build.InterceptorType;
 import org.pitest.mutationtest.build.MutationInterceptor;
@@ -42,7 +43,7 @@ final class ChangedLinesFilter implements MutationInterceptor {
   private final Map<String, NavigableSet<Integer>> changed;
 
   /**
-   * @param changed the changed line numbers, keyed by path relative to the source root
+   * @param changed the changed line numbers, keyed by {@link SourceFileKey}
    */
   ChangedLinesFilter(Map<String, NavigableSet<Integer>> changed) {
     this.changed = changed;
@@ -66,12 +67,10 @@ final class ChangedLinesFilter implements MutationInterceptor {
   public void end() {}
 
   private boolean onChangedLine(MutationDetails mutation) {
-    String packagePath = mutation.getClassName().getPackage().asInternalName();
-    String path =
-        packagePath.isEmpty()
-            ? mutation.getFilename()
-            : packagePath + "/" + mutation.getFilename();
-    NavigableSet<Integer> lines = changed.get(path);
+    String key =
+        SourceFileKey.of(
+            mutation.getClassName().getPackage().asInternalName(), mutation.getFilename());
+    NavigableSet<Integer> lines = changed.get(key);
     return lines != null && lines.contains(mutation.getLineNumber());
   }
 }
